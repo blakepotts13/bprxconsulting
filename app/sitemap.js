@@ -1,0 +1,2 @@
+import { site } from '../lib/site'; import { services } from '../lib/services'; import { resources } from '../lib/resources';
+export default function sitemap(){const staticRoutes=['','/about','/contact','/resources','/privacy'];return [...staticRoutes.map(route=>({url:`${site.domain}${route}`,lastModified:new Date()})),...services.map(s=>({url:`${site.domain}/services/${s.slug}`,lastModified:new Date()})),...resources.map(r=>({url:`${site.domain}/resources/${r.slug}`,lastModified:new Date()}))]}
