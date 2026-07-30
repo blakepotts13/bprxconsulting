@@ -1,0 +1,16 @@
+{
+  "name": "bprx-consulting",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "15.2.8",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  }
+}
