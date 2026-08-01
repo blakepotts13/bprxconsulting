@@ -2,15 +2,24 @@
   "name": "bprx-consulting",
   "version": "2.0.0",
   "private": true,
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
-    "next": "15.2.8",
+    "next": "15.5.21",
     "react": "19.0.0",
     "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "15.5.21",
+    "prettier": "^3.0.0"
   }
 }

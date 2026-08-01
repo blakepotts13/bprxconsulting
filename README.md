@@ -41,7 +41,6 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-
 ## Original BPRx logo assets
 
 The uploaded original black-and-white BPRx Consulting wordmark is used in the header and footer.
