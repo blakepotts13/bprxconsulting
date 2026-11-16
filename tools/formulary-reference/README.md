@@ -12,7 +12,7 @@ Clerk is installed through Vercel Marketplace on the Hobby ($0/month) plan. The 
 
 `FORMULARY_APPROVED_EMAILS` is an optional, comma-separated, server-side allowlist for initial administrators. Only Clerk-verified email addresses qualify. The website owner's verified address was configured in Vercel during setup. Signing up alone never grants lookup access. An auth service failure denies access.
 
-Already downloaded data cannot be recalled from a browser or CSV file. The GitHub repository is public and contains public-source CMS data: application sign-in restricts the deployed lookup, not repository source access.
+Already downloaded data cannot be recalled from a browser or CSV file. The snapshot uses public-source CMS data. If the GitHub repository is public, its source and bundled data are visible there: application sign-in restricts the deployed lookup, not repository source access.
 
 Production also requires the CNAME targets returned by Clerk's domain configuration at the domain's authoritative DNS provider. Vercel environment variables alone do not configure external DNS. Configure the targets for the exact production domain before releasing production sign-in.
 
