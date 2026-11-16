@@ -21,6 +21,19 @@ export default function Resources() {
         </div>
       </section>
       <section className="section shell">
+        <p className="eyebrow">TOOLS FOR APPROVED USERS</p>
+        <h2>Formulary Reference</h2>
+        <p>
+          Search drug billing codes, package units, and Medicare policy
+          references.
+        </p>
+        {/* This route returns a standalone HTML document and needs full navigation. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+        <a className="button" href="/tools/formulary-reference">
+          Sign in to Formulary Reference
+        </a>
+      </section>
+      <section className="section shell">
         <div className="resource-grid large">
           {resources.map((r) => (
             <Link

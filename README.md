@@ -49,3 +49,7 @@ The uploaded original black-and-white BPRx Consulting wordmark is used in the he
 - `public/bprx-logo-transparent.png` — transparent monochrome web version
 - `public/og-image.png` — social-sharing image
 - `public/apple-touch-icon.png` — mobile bookmark icon
+
+## Restricted Formulary Reference
+
+The approved-user lookup is linked from Resources and served at `/tools/formulary-reference`. See [maintenance and access management](tools/formulary-reference/README.md) for Clerk configuration, approval/revocation, source refreshes and verification.

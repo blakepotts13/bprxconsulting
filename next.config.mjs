@@ -2,6 +2,9 @@
 const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  outputFileTracingIncludes: {
+    "/tools/formulary-reference/**": ["./formulary-reference/assets/**/*"],
+  },
   async headers() {
     return [
       {

@@ -1,0 +1,75 @@
+{
+  "as_of": "2026-11-16",
+  "quarter": "2026 Q4",
+  "quarter_start": "2026-10-01",
+  "quarter_end": "2026-12-31",
+  "policy_snapshot": "2026-11-08",
+  "policy_release": "2026-11-12",
+  "opps_revision": "2026-10-15",
+  "scope": "NGS J6 Illinois default (06101 / 06102); other Medicare contractors reference only",
+  "counts": {
+    "records": 7802,
+    "ndcs": 7565,
+    "hcpcs": 961,
+    "policies": 73,
+    "diagnoses": 36598,
+    "codes_with_policy": 182,
+    "ngs_policies": 16,
+    "other_policies": 57,
+    "codes_with_diagnoses": 181,
+    "ngs_codes_with_diagnoses": 88
+  },
+  "excluded_numeric_cpt_rows": 96,
+  "excluded_inactive_future_policies": 8,
+  "sources": {
+    "crosswalk": {
+      "url": "https://www.cms.gov/files/zip/october-2026-ndc-hcpcs-crosswalk-final.zip",
+      "effective": "2026-10-01",
+      "sha256": "e6bbf7c61e6d8bbbe83cac1272772ef7e5ff2ff2dc7029a75eede77201ef5ab1"
+    },
+    "opps": {
+      "url": "https://www.cms.gov/files/zip/October-2026-OPPS-Addendum-B.zip",
+      "effective": "2026-10-01",
+      "sha256": "2fc507a1fa6715eb2c702049a18912a33017003606550f61345ae1b48b00bf5b"
+    },
+    "articles": {
+      "url": "https://downloads.cms.gov/medicare-coverage-database/downloads/exports/current_article.zip",
+      "effective": "2026-11-08",
+      "sha256": "63d304f1d406a9ee83c670b1fdfb21a14e80c7e8ef0c462ce9ea68ef92eed984"
+    }
+  },
+  "limitations": [
+    "CMS crosswalks are not a complete US drug directory.",
+    "ICD-10 matches are article-level co-listings, not a validated drug-diagnosis crosswalk or coverage approval.",
+    "Diagnosis and HCPCS group numbers are retained independently; their numbers do not establish a relationship.",
+    "Current downloaded Medicare contractor articles listing mapped HCPCS are indexed. NGS J6 Illinois is the default; other-contractor articles are reference only and do not establish Illinois coverage. NCDs, Medicaid and commercial policies are not included.",
+    "Latest-version download can omit an earlier in-effect version when a future revision exists.",
+    "G/K/N are OPPS indicators; CAH payment and drug waste eligibility cannot be inferred from these letters.",
+    "Numeric CPT rows and CPT descriptors are excluded from this free-source reference.",
+    "Updates require rebuilding and redeploying; no automatic refresh is configured."
+  ],
+  "database_sha256": "b3f9eda863b827078150e09e38edb509641911696547f6dd6ddaa1aab9487719",
+  "database_bytes": 7577600,
+  "database_chunks": [
+    {
+      "file": "database-01.bin",
+      "bytes": 2097152,
+      "sha256": "7868896f6773722662694f92f8e80bd506f6818bb5fed97d79a09b08abd0b182"
+    },
+    {
+      "file": "database-02.bin",
+      "bytes": 2097152,
+      "sha256": "d3bf0a58dd6195c9d5060635bcb773de07a9fa49a771538f0cb99e789c3e8f8c"
+    },
+    {
+      "file": "database-03.bin",
+      "bytes": 2097152,
+      "sha256": "ef2a429fe93fd92db049ff6b4e59a367259b4204c299b92569db7e2d957cc534"
+    },
+    {
+      "file": "database-04.bin",
+      "bytes": 1286144,
+      "sha256": "c1e6121bea56f04ee311854d2ed46d4b7d0a6519aeb5a24b2a7ce6cb8e42d7f2"
+    }
+  ]
+}
