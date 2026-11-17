@@ -69,7 +69,7 @@ export default function UsersAccess() {
   }, [search]);
 
   async function change(action, ids) {
-    if (busy || loading) return;
+    if (busy || loading || !data) return;
     const names = ids?.map(
       (id) =>
         data.users.find((user) => user.id === id)?.email ||
@@ -491,7 +491,10 @@ export default function UsersAccess() {
             disabled={disabled}
           />
           <div>
-            <button className="button button-small" disabled={disabled}>
+            <button
+              className="button button-small"
+              disabled={disabled || !data}
+            >
               Send invitations / approve existing
             </button>
             <span className="access-note">
