@@ -11,6 +11,13 @@ const labels = {
   revoked: "Revoked",
   blocked: "Blocked",
   all: "All users",
+  admins: "Administrators",
+};
+const historyLabels = {
+  approve: "Approved",
+  revoke: "Revoked",
+  "make-admin": "Made administrator",
+  "remove-admin": "Removed administrator role",
 };
 const date = (value) =>
   value
@@ -77,13 +84,17 @@ export default function UsersAccess() {
         id,
     );
     const question =
-      action === "invite"
-        ? `Send preapproved invitations to these addresses? Existing verified accounts will be approved without an email.\n\n${emails}`
-        : action === "revoke"
-          ? `Remove Formulary Reference access for:\n\n${names.join("\n")}`
-          : action === "cancel-invitation"
-            ? `Cancel the invitation for ${names.join(", ")}?`
-            : null;
+      action === "make-admin"
+        ? `Make ${names.join(", ")} an administrator? They will be able to approve/revoke reference access and invite users. Only the owner can change administrator roles.`
+        : action === "remove-admin"
+          ? `Remove the administrator role from ${names.join(", ")}? Their Formulary Reference access will stay unchanged.`
+          : action === "invite"
+            ? `Send preapproved invitations to these addresses? Existing verified accounts will be approved without an email.\n\n${emails}`
+            : action === "revoke"
+              ? `Remove Formulary Reference access for:\n\n${names.join("\n")}`
+              : action === "cancel-invitation"
+                ? `Cancel the invitation for ${names.join(", ")}?`
+                : null;
     if (question && !window.confirm(question)) return;
     setBusy(true);
     setError("");
@@ -122,10 +133,16 @@ export default function UsersAccess() {
     }
   }
   const users = data?.users || [];
-  const filtered = users.filter((user) => tab === "all" || user.status === tab);
+  const filtered = users.filter(
+    (user) =>
+      tab === "all" ||
+      (tab === "admins"
+        ? user.admin || user.assignedAdmin
+        : user.status === tab),
+  );
   const shown = filtered.slice(page * 25, (page + 1) * 25);
   const selectable = shown.filter(
-    (user) => !user.admin && user.status !== "blocked",
+    (user) => !user.admin && !user.assignedAdmin && user.status !== "blocked",
   );
   const disabled = busy || loading;
   const counts = Object.fromEntries(
@@ -133,7 +150,11 @@ export default function UsersAccess() {
       key,
       key === "all"
         ? users.length
-        : users.filter((user) => user.status === key).length,
+        : users.filter((user) =>
+            key === "admins"
+              ? user.admin || user.assignedAdmin
+              : user.status === key,
+          ).length,
     ]),
   );
   function switchTab(value) {
@@ -156,6 +177,11 @@ export default function UsersAccess() {
         </div>
         <span className="access-private">Administrator only</span>
       </header>
+      <p className="access-note access-role-guide">
+        {data?.actorIsOwner
+          ? "As owner, you can make approved users with verified primary emails administrators. Use All users or Administrators below to manage roles."
+          : "Administrators manage reference approvals and invitations. Only the owner can appoint or remove administrators."}
+      </p>
       <div className="access-stats" aria-label="Account overview">
         {["pending", "approved", "all"].map((key) => (
           <button
@@ -342,6 +368,7 @@ export default function UsersAccess() {
                     disabled={
                       disabled ||
                       user.admin ||
+                      user.assignedAdmin ||
                       user.status === "blocked" ||
                       (!selected.includes(user.id) && selected.length >= 20)
                     }
@@ -359,7 +386,11 @@ export default function UsersAccess() {
                     <span>
                       {user.name} ·{" "}
                       {user.verified ? "Email verified" : "Email unverified"}
-                      {user.admin ? " · Administrator" : ""}
+                      {user.owner
+                        ? " · Owner (protected)"
+                        : user.admin || user.assignedAdmin
+                          ? " · Administrator"
+                          : ""}
                     </span>
                   </div>
                   <span className={`access-badge access-${user.status}`}>
@@ -379,6 +410,7 @@ export default function UsersAccess() {
                       )}
                     {user.status !== "revoked" &&
                       !user.admin &&
+                      !user.assignedAdmin &&
                       user.status !== "blocked" && (
                         <button
                           type="button"
@@ -389,10 +421,37 @@ export default function UsersAccess() {
                           Revoke
                         </button>
                       )}
+                    {data.actorIsOwner &&
+                      !user.owner &&
+                      (user.admin || user.assignedAdmin) && (
+                        <button
+                          type="button"
+                          className="access-secondary access-danger"
+                          disabled={disabled}
+                          onClick={() => change("remove-admin", [user.id])}
+                        >
+                          Remove admin
+                        </button>
+                      )}
+                    {data.actorIsOwner &&
+                      !user.owner &&
+                      !user.admin &&
+                      !user.assignedAdmin &&
+                      user.verified &&
+                      user.status === "approved" && (
+                        <button
+                          type="button"
+                          className="access-secondary"
+                          disabled={disabled}
+                          onClick={() => change("make-admin", [user.id])}
+                        >
+                          Make admin
+                        </button>
+                      )}
                   </div>
                 </div>
                 <details>
-                  <summary>Account details &amp; approval history</summary>
+                  <summary>Account details &amp; access history</summary>
                   <dl>
                     <div>
                       <dt>Joined</dt>
@@ -412,8 +471,8 @@ export default function UsersAccess() {
                     <ol>
                       {[...user.history].reverse().map((event, index) => (
                         <li key={index}>
-                          {event.action === "approve" ? "Approved" : "Revoked"}{" "}
-                          by {event.by} · {date(event.at)}
+                          {historyLabels[event.action] || event.action} by{" "}
+                          {event.by} · {date(event.at)}
                         </li>
                       ))}
                     </ol>
@@ -539,9 +598,10 @@ export default function UsersAccess() {
       </section>
       <p className="access-footnote">
         Access changes apply on the next request to the reference. Administrator
-        accounts are protected from revocation here. History keeps the latest 8
-        changes per account made through this page; earlier dashboard changes
-        are not included.
+        accounts are protected from reference revocation here. Only the owner
+        can change administrator roles; owner accounts cannot be demoted here.
+        History keeps the latest 8 changes per account made through this page;
+        earlier dashboard changes are not included.
       </p>
     </main>
   );

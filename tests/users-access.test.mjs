@@ -4,6 +4,7 @@ import {
   accessSnapshot,
   manageAccess,
   isAccessAdmin,
+  isAccessOwner,
   assertSameOrigin,
   userSummary,
   parseEmails,
@@ -124,7 +125,14 @@ test("every listing and mutation independently rejects anonymous and non-admin u
     ],
   ]) {
     await assert.rejects(accessSnapshot(client, actor, config), { status });
-    for (const action of ["approve", "revoke", "invite", "cancel-invitation"])
+    for (const action of [
+      "approve",
+      "revoke",
+      "invite",
+      "cancel-invitation",
+      "make-admin",
+      "remove-admin",
+    ])
       await assert.rejects(
         manageAccess(
           client,
@@ -341,4 +349,198 @@ test("snapshot paginates and explicitly reports a capped result set", async () =
   assert.equal(snapshot.users.length, 1000);
   assert.equal(snapshot.totalUsers, 1001);
   assert.equal(snapshot.truncated, true);
+});
+
+test("private/public metadata cannot grant ownership; only verified configured owners can manage roles", async () => {
+  assert.equal(isAccessOwner(owner, config.adminEmails), true);
+  const { client, accounts, writes } = fixture();
+  const delegated = accounts[3];
+  delegated.privateMetadata.formularyOwner = true;
+  delegated.publicMetadata.formularyOwner = true;
+  assert.equal(isAccessOwner(delegated, config.adminEmails), false);
+  const snapshot = await accessSnapshot(client, delegated, config);
+  assert.equal(snapshot.actorIsOwner, false);
+  assert.equal(snapshot.users.find((user) => user.id === owner.id).owner, true);
+  assert.equal(
+    (await accessSnapshot(client, owner, config)).actorIsOwner,
+    true,
+  );
+  for (const action of ["make-admin", "remove-admin"]) {
+    await assert.rejects(
+      manageAccess(
+        client,
+        delegated,
+        config,
+        { action, ids: ["user_legacy"], actorIsOwner: true },
+        "https://app.example.com",
+      ),
+      { status: 403 },
+    );
+  }
+  assert.equal(writes.length, 0);
+});
+
+test("owner can promote and demote an approved verified account without changing reference approval", async () => {
+  const { client, accounts, writes } = fixture();
+  const target = accounts[2];
+  target.publicMetadata = { unrelated: "public" };
+  target.privateMetadata = { unrelated: "private" };
+  let result = await manageAccess(
+    client,
+    owner,
+    config,
+    { action: "make-admin", ids: [target.id], actor: "forged@example.com" },
+    "https://app.example.com",
+  );
+  assert.equal(result.results[0].ok, true);
+  assert.equal(isAccessAdmin(target, config.adminEmails), true);
+  assert.equal(isAccessOwner(target, config.adminEmails), false);
+  assert.equal(userSummary(target, config).status, "approved");
+  assert.deepEqual(target.publicMetadata, { unrelated: "public" });
+  assert.equal(target.privateMetadata.unrelated, "private");
+  assert.equal(
+    target.privateMetadata.formularyAccessHistory.at(-1).action,
+    "make-admin",
+  );
+  assert.equal(
+    target.privateMetadata.formularyAccessHistory.at(-1).by,
+    "owner@example.com",
+  );
+  assert.equal(writes[0].patch.publicMetadata, undefined);
+  await manageAccess(
+    client,
+    owner,
+    config,
+    { action: "make-admin", ids: [target.id] },
+    "https://app.example.com",
+  );
+  assert.equal(writes.length, 1, "Repeated role changes are no-ops");
+  result = await manageAccess(
+    client,
+    owner,
+    config,
+    { action: "remove-admin", ids: [target.id] },
+    "https://app.example.com",
+  );
+  assert.equal(result.results[0].ok, true);
+  assert.equal(isAccessAdmin(target, config.adminEmails), false);
+  assert.equal(userSummary(target, config).status, "approved");
+  assert.deepEqual(
+    target.privateMetadata.formularyAccessHistory.map((event) => event.action),
+    ["make-admin", "remove-admin"],
+  );
+  await assert.rejects(accessSnapshot(client, target, config), { status: 403 });
+  assert.equal(target.privateMetadata.unrelated, "private");
+});
+
+test("owners are protected from role changes and role actions reject bulk targets", async () => {
+  const { client, writes } = fixture();
+  for (const action of ["make-admin", "remove-admin"]) {
+    const result = await manageAccess(
+      client,
+      owner,
+      config,
+      { action, ids: [owner.id] },
+      "https://app.example.com",
+    );
+    assert.equal(result.results[0].ok, false);
+    assert.match(result.results[0].message, /Owner accounts are protected/);
+    await assert.rejects(
+      manageAccess(
+        client,
+        owner,
+        config,
+        { action, ids: ["user_legacy", "user_admin"] },
+        "https://app.example.com",
+      ),
+      /one administrator role at a time/,
+    );
+  }
+  assert.equal(writes.length, 0);
+});
+
+test("promotion requires approved reference access, a verified primary email and an unblocked account", async () => {
+  for (const condition of [
+    "pending",
+    "revoked",
+    "unverified",
+    "secondary-only",
+    "banned",
+    "locked",
+  ]) {
+    const { client, accounts, writes } = fixture();
+    const target = accounts[1];
+    target.publicMetadata.formularyAccess = true;
+    if (condition === "pending") target.publicMetadata = {};
+    if (condition === "revoked") target.publicMetadata.formularyAccess = false;
+    if (condition === "unverified")
+      target.emailAddresses[0].verification.status = "unverified";
+    if (condition === "secondary-only") target.primaryEmailAddressId = "other";
+    if (["banned", "locked"].includes(condition)) target[condition] = true;
+    const result = await manageAccess(
+      client,
+      owner,
+      config,
+      { action: "make-admin", ids: [target.id] },
+      "https://app.example.com",
+    );
+    assert.equal(result.results[0].ok, false, condition);
+    assert.equal(writes.length, 0, condition);
+  }
+});
+
+test("owner can remove an inactive assigned role; assigned admins stay protected from reference revocation", async () => {
+  const { client, accounts } = fixture();
+  const target = accounts[3];
+  target.emailAddresses[0].verification.status = "unverified";
+  assert.equal(isAccessAdmin(target, config.adminEmails), false);
+  assert.equal(userSummary(target, config).assignedAdmin, true);
+  const revocation = await manageAccess(
+    client,
+    owner,
+    config,
+    { action: "revoke", ids: [target.id] },
+    "https://app.example.com",
+  );
+  assert.equal(revocation.results[0].ok, false);
+  target.banned = true;
+  const result = await manageAccess(
+    client,
+    owner,
+    config,
+    { action: "remove-admin", ids: [target.id] },
+    "https://app.example.com",
+  );
+  assert.equal(result.results[0].ok, true);
+  assert.equal(target.privateMetadata.formularyAdmin, false);
+});
+
+test("role history is bounded and full metadata prevents a partial promotion", async () => {
+  const { client, accounts, writes } = fixture();
+  const target = accounts[2];
+  target.privateMetadata.formularyAccessHistory = Array.from(
+    { length: 8 },
+    () => ({ action: "approve", at: "2026-01-01", by: "original@example.com" }),
+  );
+  await manageAccess(
+    client,
+    owner,
+    config,
+    { action: "make-admin", ids: [target.id] },
+    "https://app.example.com",
+  );
+  assert.equal(target.privateMetadata.formularyAccessHistory.length, 8);
+  assert.equal(userSummary(target, config).history.at(-1).action, "make-admin");
+  target.privateMetadata.formularyAdmin = false;
+  target.privateMetadata.unrelated = "x".repeat(8000);
+  const result = await manageAccess(
+    client,
+    owner,
+    config,
+    { action: "make-admin", ids: [target.id] },
+    "https://app.example.com",
+  );
+  assert.equal(result.results[0].ok, false);
+  assert.equal(target.privateMetadata.formularyAdmin, false);
+  assert.equal(writes.length, 1);
 });
