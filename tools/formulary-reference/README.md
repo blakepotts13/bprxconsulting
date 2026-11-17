@@ -47,3 +47,41 @@ node --use-env-proxy --env-file=.env.local tests/live-formulary-access.mjs
 Set `FORMULARY_TEST_BASE_URL` to test a preview instead of localhost. The test refuses production keys, creates one temporary development-only user and session, verifies pending/approved/revoked access through the real route, and deletes the user afterward. It sends no invitations. Environments requiring an HTTP proxy must also start Next.js with their normal proxy configuration (`NODE_USE_ENV_PROXY=1` on supported Node versions).
 
 Build tracing must include `formulary-reference/assets/**/*` in the dynamic route's `.nft.json`. Preserve the `outputFileTracingIncludes` setting in `next.config.mjs`.
+
+### Users & Access administration
+
+Open `/tools/users-access` (also linked from `/tools/account` for administrators).
+`FORMULARY_ADMIN_EMAILS` is a **server-only** comma-separated list of verified
+primary email addresses allowed to administer access. It is independent of
+`FORMULARY_APPROVED_EMAILS`. Alternatively, designate another administrator with
+server-managed Clerk **private** metadata `formularyAdmin: true`; their primary
+email must be verified. Public and unsafe metadata cannot grant administrator
+rights. Ordinary approval never grants administrator rights.
+
+The directory defaults to pending users. Search by name/email, approve users
+individually or in batches of up to 20, and revoke reference access immediately
+on the next request. Administrator accounts are protected from revocation here.
+Keep the bootstrap owner in the server environment so it cannot be removed by a
+routine approval change.
+
+Invitations are preapproved, expire in seven days, and send Clerk's invitation
+email only after the administrator submits and confirms the action. Existing
+verified accounts are approved instead, without sending an email. Pending
+invitations can be canceled; cancellation invalidates the invitation link but
+does not block ordinary signup (which still requires separate approval).
+Invitations grant reference access only, never administrator rights. Existing
+sign-in and email-verification settings still apply.
+
+Each account retains the latest eight approve/revoke events made through this
+page in Clerk private metadata, recording the server-derived administrator
+email and timestamp. Metadata patches preserve unrelated fields. This is recent
+operational history, not an immutable audit log: concurrent writes to the same
+account can overwrite history, and earlier/manual Clerk edits are not recorded.
+Invitations show their creation date. No separate database or paid service is
+required. Search results are capped at 1,000 users and 1,000 pending invitations;
+the page displays a warning to narrow the search if that cap is reached.
+
+Every admin read and mutation rechecks the current Clerk user on the server.
+Responses are private/no-store; writes additionally require same-origin JSON.
+Tests cover privilege separation, unauthenticated/non-admin denials, origin
+checks, batch limits, invitation behavior, history, and protected administrators.
