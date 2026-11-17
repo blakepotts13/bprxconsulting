@@ -3,10 +3,15 @@ import { redirect } from "next/navigation";
 import { SignOutButton, UserButton } from "@clerk/nextjs";
 import { getFormularyAccess } from "../../../lib/formulary-auth";
 
+import { getAccessAdministrator } from "../../../lib/users-access-auth";
+
 export const metadata = { title: "Reference access" };
 
 export default async function AccountPage() {
-  const access = await getFormularyAccess();
+  const [access, administrator] = await Promise.all([
+    getFormularyAccess(),
+    getAccessAdministrator(),
+  ]);
   if (access.status === "signed-out") redirect("/tools/sign-in");
   return (
     <main className="section shell narrow">
@@ -32,6 +37,13 @@ export default async function AccountPage() {
             ? "You are signed in. Contact BPRx Consulting to request access to the reference."
             : "Please try again shortly."}{" "}
           <Link href="/contact">Contact us</Link>
+        </p>
+      )}
+      {administrator && (
+        <p>
+          <Link className="button" href="/tools/users-access">
+            Users &amp; Access
+          </Link>
         </p>
       )}
       <UserButton />

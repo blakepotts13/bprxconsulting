@@ -1,0 +1,366 @@
+.access-workspace {
+  padding-block: 28px 72px;
+  max-width: 1180px;
+}
+.access-topline,
+.access-heading,
+.access-panel-head,
+.access-bulk,
+.access-pagination,
+.access-invite > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.access-topline {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--blue);
+}
+.access-heading {
+  padding-block: 36px 24px;
+}
+.access-heading h1 {
+  margin: 0;
+  color: var(--navy);
+  font-size: clamp(32px, 4vw, 48px);
+  letter-spacing: -0.04em;
+}
+.access-heading p:not(.eyebrow),
+.access-panel-head p {
+  color: var(--muted);
+  margin: 10px 0 0;
+}
+.access-private {
+  padding: 8px 12px;
+  background: var(--ice);
+  color: var(--navy2);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.access-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.access-stats button {
+  text-align: left;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 22px;
+  font: inherit;
+  cursor: pointer;
+}
+.access-stats strong {
+  display: block;
+  font-size: 32px;
+  color: var(--navy);
+  margin-bottom: 5px;
+}
+.access-stats span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.access-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 28px;
+  margin-bottom: 24px;
+  background: white;
+}
+.access-panel h2 {
+  font-size: 25px;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+.access-panel-head {
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+.access-panel-head p {
+  font-size: 14px;
+  max-width: 760px;
+}
+.access-secondary {
+  background: white;
+  border: 1px solid #c0cdd3;
+  color: var(--navy2);
+  border-radius: 8px;
+  padding: 10px 13px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.access-danger {
+  color: #9a2929;
+}
+.access-workspace button:disabled {
+  cursor: default;
+  opacity: 0.5;
+  transform: none;
+}
+.access-search label,
+.access-invite label {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 9px;
+}
+.access-search > div {
+  display: flex;
+  gap: 10px;
+}
+.access-search input {
+  max-width: 650px;
+}
+.access-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.access-tabs button {
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  padding: 10px 12px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.access-tabs button[aria-pressed="true"] {
+  background: var(--navy);
+  color: white;
+}
+.access-tabs span {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-left: 6px;
+}
+.access-bulk {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  padding-block: 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.access-bulk label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+.access-workspace input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+.access-user {
+  border-top: 1px solid var(--line);
+  padding-block: 20px;
+}
+.access-user-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.access-identity {
+  flex: 1;
+  min-width: 0;
+}
+.access-identity strong,
+.access-invitations strong {
+  display: block;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.access-identity span,
+.access-invitations span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 5px;
+}
+.access-badge {
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  background: #fff1d7;
+  color: #765000;
+}
+.access-approved {
+  background: #e3f5eb;
+  color: #14653e;
+}
+.access-revoked,
+.access-blocked {
+  background: #fcebec;
+  color: #923333;
+}
+.access-row-actions {
+  display: flex;
+  gap: 8px;
+  min-width: 68px;
+  justify-content: flex-end;
+}
+.access-user details {
+  margin: 13px 0 0 33px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.access-user summary {
+  cursor: pointer;
+  color: var(--blue);
+  font-weight: 700;
+}
+.access-user dl {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.access-user dt {
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.access-user dd {
+  margin: 0;
+}
+.access-user ol {
+  padding-left: 18px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+.access-empty {
+  padding: 32px 10px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.access-empty p {
+  max-width: 520px;
+  margin-inline: auto;
+}
+.access-note,
+.access-footnote {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.access-pagination {
+  justify-content: center;
+  padding-top: 18px;
+  font-size: 13px;
+}
+.access-alert {
+  background: var(--ice);
+  border: 1px solid #b1d4d1;
+  padding: 16px;
+  border-radius: 10px;
+  margin-bottom: 22px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.access-alert ul {
+  margin-bottom: 0;
+  padding-left: 22px;
+  line-height: 1.8;
+}
+.access-error {
+  background: #fff3f3;
+  border-color: #e5bbbb;
+  color: #923333;
+}
+.access-invite label span {
+  font-weight: 400;
+  color: var(--muted);
+}
+.access-invite > div {
+  justify-content: flex-start;
+  margin-block: 14px 32px;
+}
+.access-invitations {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 0;
+}
+.access-invitations li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-block: 16px;
+}
+@media (max-width: 650px) {
+  .access-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .access-stats {
+    gap: 8px;
+  }
+  .access-stats button {
+    padding: 14px 10px;
+  }
+  .access-stats span {
+    font-size: 11px;
+  }
+  .access-stats strong {
+    font-size: 26px;
+  }
+  .access-panel {
+    padding: 18px 14px;
+  }
+  .access-panel-head {
+    gap: 10px;
+  }
+  .access-panel-head p {
+    overflow-wrap: anywhere;
+  }
+  .access-user-main {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .access-identity {
+    flex-basis: calc(100% - 32px);
+  }
+  .access-badge {
+    margin-left: 27px;
+  }
+  .access-row-actions {
+    margin-left: auto;
+  }
+  .access-user details {
+    margin-left: 27px;
+  }
+  .access-bulk {
+    gap: 10px;
+  }
+  .access-invite > div,
+  .access-invitations li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .access-tabs {
+    gap: 2px;
+  }
+  .access-tabs button {
+    padding: 9px 8px;
+    font-size: 12px;
+  }
+}
