@@ -37,7 +37,10 @@ unit, effective dates, CMS methodology notes, and the companion manufacturer NDR
 restriction list. Missing or `N/A` amounts display “No numeric amount published”
 and export as “Not published,” never an assumed zero. The rate's presence does
 not establish coverage. The detail card and Sources dialog link to the original
-CMS ZIP and explain the CAH payment distinction.
+CMS ZIP and explain the CAH payment distinction. Where the two CMS files use
+different billing-unit descriptions, the card flags both source values for
+equivalence review; rates are never automatically rescaled. The CSV includes
+the same comparison flag.
 
 To refresh **only pricing within the same crosswalk quarter**, from this directory:
 

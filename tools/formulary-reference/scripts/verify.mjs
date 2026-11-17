@@ -301,6 +301,10 @@ assert.match($("detail-content").textContent, /does not mean \$0/);
 setSearch("A9606", "hcpcs");
 $("results-body").querySelector("button").click();
 assert.match($("detail-content").textContent, /100% AWP/);
+assert.match(
+  $("detail-content").querySelector(".allowable-unit-warning").textContent,
+  /Pricing file: 1 microCurie. Crosswalk: 1 mCi/,
+);
 assert.equal(
   $("detail-content").querySelector(".allowable-amount").textContent,
   "No numeric amount published",
