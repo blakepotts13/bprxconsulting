@@ -5,3 +5,9 @@ node_modules/
 .env.local
 .env.*.local
 *.log
+.env*
+!.env.example
+
+# Downloaded CMS source caches and Python bytecode
+tools/formulary-reference/sources/
+**/__pycache__/
