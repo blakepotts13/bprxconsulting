@@ -105,6 +105,8 @@ export default function UsersAccess() {
           ...result,
           target:
             data.users.find((user) => user.id === result.target)?.email ||
+            data.invitations.find((invite) => invite.id === result.target)
+              ?.email ||
             result.target,
         })),
       );
