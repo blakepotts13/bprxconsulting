@@ -86,11 +86,22 @@ Build tracing must include `formulary-reference/assets/**/*` in the dynamic rout
 
 Open `/tools/users-access` (also linked from `/tools/account` for administrators).
 `FORMULARY_ADMIN_EMAILS` is a **server-only** comma-separated list of verified
-primary email addresses allowed to administer access. It is independent of
+primary email addresses of protected owners allowed to administer access and
+manage administrator roles. It is independent of
 `FORMULARY_APPROVED_EMAILS`. Alternatively, designate another administrator with
 server-managed Clerk **private** metadata `formularyAdmin: true`; their primary
 email must be verified. Public and unsafe metadata cannot grant administrator
 rights. Ordinary approval never grants administrator rights.
+
+Owners can now use **All users → Make admin** on an approved account with a
+verified primary email. **Administrators → Remove admin** removes the delegated
+role without changing reference approval. Each action requires confirmation and
+is applied to one account at a time. Other administrators cannot change roles,
+including through direct API calls. Owner accounts cannot be demoted here;
+bootstrap owners remain configured in the server environment. Blocked accounts
+cannot be promoted, and an assigned role can be removed even if its holder later
+becomes blocked or unverified. Role changes take effect on the next admin request.
+Role and approval changes share the account's recent access history.
 
 The directory defaults to pending users. Search by name/email, approve users
 individually or in batches of up to 20, and revoke reference access immediately
@@ -106,7 +117,7 @@ does not block ordinary signup (which still requires separate approval).
 Invitations grant reference access only, never administrator rights. Existing
 sign-in and email-verification settings still apply.
 
-Each account retains the latest eight approve/revoke events made through this
+Each account retains the latest eight approval/revocation and administrator-role events made through this
 page in Clerk private metadata, recording the server-derived administrator
 email and timestamp. Metadata patches preserve unrelated fields. This is recent
 operational history, not an immutable audit log: concurrent writes to the same

@@ -213,6 +213,7 @@
 }
 .access-row-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 68px;
   justify-content: flex-end;
