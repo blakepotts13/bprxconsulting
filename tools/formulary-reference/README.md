@@ -22,11 +22,45 @@ The committed snapshot contains 7,802 package rows, 7,565 NDCs and 961 HCPCS cod
 
 Illinois NGS J6 is the default scope (16 articles). The 57 other-contractor articles are labeled reference only. ICD-10 listings are article co-listings, not validated HCPCS/diagnosis coverage pairs. Independent group notes, contractor/state provenance and article links remain available. Blank diagnoses mean no matching listing in this snapshot, not a determination of noncoverage. OPPS status indicators are reference information; they do not establish critical access hospital payment. Billing-unit flags and JW/JZ guidance require review against the actual product, setting and payer rules.
 
+### Medicare Allowable
+
+Drug details and CSV exports include **Medicare Allowable**, the published CMS
+quarterly Part B amount per HCPCS billing unit. The October–December 2026 source
+provides numeric amounts for 885 mapped HCPCS codes and 7,520 package mappings.
+This is a code-level benchmark shared by mapped NDCs, not an NDC acquisition
+price, a price per package, raw ASP, or a CAH reimbursement estimate. Applicable
+add-ons are already included: do not add another 6% or multiply a rate by a
+package quantity without verifying the HCPCS units.
+
+The importer preserves source decimal precision, the pricing file's own billing
+unit, effective dates, CMS methodology notes, and the companion manufacturer NDRA
+restriction list. Missing or `N/A` amounts display “No numeric amount published”
+and export as “Not published,” never an assumed zero. The rate's presence does
+not establish coverage. The detail card and Sources dialog link to the original
+CMS ZIP and explain the CAH payment distinction. Where the two CMS files use
+different billing-unit descriptions, the card flags both source values for
+equivalence review; rates are never automatically rescaled. The CSV includes
+the same comparison flag.
+
+To refresh **only pricing within the same crosswalk quarter**, from this directory:
+
+```sh
+python scripts/fetch_sources.py --only allowables --refresh
+python scripts/update_allowables.py
+```
+
+This verifies and reconstructs the private database chunks, replaces only the
+pricing table, updates source hashes/counts and embedded metadata, and repackages
+the database. Crosswalk rows and policy articles are preserved. For a new quarter,
+update and validate the URL/quarter/date constants in `medicare_allowable.py`,
+the fetch source URL, and the crosswalk snapshot together. The importer rejects
+unexpected periods, malformed amounts, duplicate HCPCS rates, and mixed quarters.
+
 ## Refresh workflow
 
 Refreshes are manual; there is no automatic CMS feed or scheduled job. Use Python with `requirements.txt` in an isolated virtual environment.
 
-1. Update official source URLs and effective dates in `scripts/fetch_sources.py` and the `ASOF`/snapshot metadata in `scripts/build_database.py` for the intended release. Check CMS publication notices. Do not silently substitute another quarter or label a newer article archive with an older date.
+1. Update official source URLs and effective dates in `scripts/fetch_sources.py` and `scripts/medicare_allowable.py`, and the `ASOF`/snapshot metadata in `scripts/build_database.py` for the intended release. Check CMS publication notices. Do not silently substitute another quarter or label a newer article archive with an older date.
 2. Move aside the ignored `sources/` cache when obtaining a fresh snapshot. The fetch script reuses existing ZIP files. Run `python scripts/fetch_sources.py` from this directory.
 3. Run `python scripts/build_database.py`. It builds the database, then `package_data.py` packages it into private chunks of at most 2 MiB and updates each chunk's hash and the manifest. The temporary whole SQLite file is removed. Keep the HTML/UI assets and vendor license.
 4. Run `corepack pnpm test:formulary`, `corepack pnpm lint`, and `corepack pnpm build` from the repository root. Review count/scope changes, flagged units, sample NDCs and policy provenance before committing the snapshot.

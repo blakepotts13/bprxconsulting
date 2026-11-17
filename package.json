@@ -10,7 +10,7 @@
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:formulary": "node tools/formulary-reference/scripts/verify.mjs && node --test tests/formulary-access.test.mjs tests/users-access.test.mjs"
+    "test:formulary": "python3 -m unittest discover -s tests -p 'test_medicare_allowable.py' && node tools/formulary-reference/scripts/verify.mjs && node --test tests/formulary-access.test.mjs tests/users-access.test.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "7.10.0",

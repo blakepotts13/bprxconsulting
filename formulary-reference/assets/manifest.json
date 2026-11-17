@@ -17,7 +17,10 @@
     "ngs_policies": 16,
     "other_policies": 57,
     "codes_with_diagnoses": 181,
-    "ngs_codes_with_diagnoses": 88
+    "ngs_codes_with_diagnoses": 88,
+    "allowable_hcpcs": 885,
+    "allowable_packages": 7520,
+    "ndra_hcpcs": 0
   },
   "excluded_numeric_cpt_rows": 96,
   "excluded_inactive_future_policies": 8,
@@ -36,6 +39,17 @@
       "url": "https://downloads.cms.gov/medicare-coverage-database/downloads/exports/current_article.zip",
       "effective": "2026-11-08",
       "sha256": "63d304f1d406a9ee83c670b1fdfb21a14e80c7e8ef0c462ce9ea68ef92eed984"
+    },
+    "allowables": {
+      "url": "https://www.cms.gov/files/zip/october-2026-medicare-part-b-payment-limit-files-final.zip",
+      "effective": "2026-10-01",
+      "effective_end": "2026-12-31",
+      "quarter": "2026 Q4",
+      "sha256": "a9b7afa80aae96c43cf84bf0b18648f1974429de2913e2e29d8342747174c417",
+      "rate_file": "section 508 version of October 2026 Medicare Part B Payment Limit File 091626.csv",
+      "restriction_file": "section 508 version of October 2026 Drugs Not Payable Under Part B 091426.csv",
+      "rate_hcpcs": 886,
+      "restriction_rows": 7
     }
   },
   "limitations": [
@@ -46,15 +60,16 @@
     "Latest-version download can omit an earlier in-effect version when a future revision exists.",
     "G/K/N are OPPS indicators; CAH payment and drug waste eligibility cannot be inferred from these letters.",
     "Numeric CPT rows and CPT descriptors are excluded from this free-source reference.",
-    "Updates require rebuilding and redeploying; no automatic refresh is configured."
+    "Updates require rebuilding and redeploying; no automatic refresh is configured.",
+    "Medicare Allowable is the published quarterly CMS Part B amount per HCPCS billing unit, including applicable add-ons; it is not raw ASP or a guarantee of coverage, acquisition cost, or CAH reimbursement. Source notes and manufacturer-specific NDRA restrictions must be reviewed."
   ],
-  "database_sha256": "b3f9eda863b827078150e09e38edb509641911696547f6dd6ddaa1aab9487719",
-  "database_bytes": 7577600,
+  "database_sha256": "46855f74f4810a8365c701477c396d3945e501766dec9852a43d188077fa25a9",
+  "database_bytes": 7630848,
   "database_chunks": [
     {
       "file": "database-01.bin",
       "bytes": 2097152,
-      "sha256": "7868896f6773722662694f92f8e80bd506f6818bb5fed97d79a09b08abd0b182"
+      "sha256": "70429235a0038b4408c57054900f793f5f1bc68774f65089bacd28b95f40dcce"
     },
     {
       "file": "database-02.bin",
@@ -68,8 +83,8 @@
     },
     {
       "file": "database-04.bin",
-      "bytes": 1286144,
-      "sha256": "c1e6121bea56f04ee311854d2ed46d4b7d0a6519aeb5a24b2a7ce6cb8e42d7f2"
+      "bytes": 1339392,
+      "sha256": "fc1e1dbaf6c6b46d2c7263ed6f4fbf3279fc7e694c8ff9362b70bd95217aa79d"
     }
   ]
 }
