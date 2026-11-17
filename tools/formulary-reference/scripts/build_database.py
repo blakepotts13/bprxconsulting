@@ -2,6 +2,7 @@
 import csv,json,re,sqlite3,zipfile,io,hashlib
 from pathlib import Path
 from datetime import date
+from medicare_allowable import import_allowables, update_manifest
 import pandas as pd
 from bs4 import BeautifulSoup
 csv.field_size_limit(20_000_000)
@@ -87,6 +88,8 @@ for kind,filename,groupcol in [('hcpcs','article_x_hcpc_code_group','hcpc_code_g
    db.execute('INSERT OR REPLACE INTO policy_groups VALUES(?,?,?,?)',(r['article_id'],kind,r[groupcol],plain(r['paragraph'])))
 counts={key:db.execute(sql).fetchone()[0] for key,sql in {'records':'SELECT COUNT(*) FROM drugs','ndcs':'SELECT COUNT(DISTINCT ndc) FROM drugs','hcpcs':'SELECT COUNT(DISTINCT hcpcs) FROM drugs','policies':'SELECT COUNT(*) FROM policies','diagnoses':'SELECT COUNT(*) FROM diagnosis','codes_with_policy':'SELECT COUNT(DISTINCT hcpcs) FROM policy_hcpcs','ngs_policies':'SELECT COUNT(*) FROM policies WHERE part_a=1 OR part_b=1','other_policies':'SELECT COUNT(*) FROM policies WHERE part_a=0 AND part_b=0','codes_with_diagnoses':'SELECT COUNT(DISTINCT hcpcs) FROM policy_hcpcs ph WHERE EXISTS(SELECT 1 FROM diagnosis dx WHERE dx.policy_id=ph.policy_id)','ngs_codes_with_diagnoses':'SELECT COUNT(DISTINCT ph.hcpcs) FROM policy_hcpcs ph JOIN policies p ON p.id=ph.policy_id WHERE (p.part_a=1 OR p.part_b=1) AND EXISTS(SELECT 1 FROM diagnosis dx WHERE dx.policy_id=p.id)'}.items()}
 meta={'as_of':ASOF,'quarter':'2026 Q4','quarter_start':'2026-10-01','quarter_end':'2026-12-31','policy_snapshot':'2026-11-08','policy_release':'2026-11-12','opps_revision':'2026-10-15','scope':'NGS J6 Illinois default (06101 / 06102); other Medicare contractors reference only','counts':counts,'excluded_numeric_cpt_rows':excluded,'excluded_inactive_future_policies':future,'sources':{key:json.loads((ROOT/'sources'/f'{key}-manifest.json').read_text()) for key in ['crosswalk','opps','articles']},'limitations':['CMS crosswalks are not a complete US drug directory.','ICD-10 matches are article-level co-listings, not a validated drug-diagnosis crosswalk or coverage approval.','Diagnosis and HCPCS group numbers are retained independently; their numbers do not establish a relationship.','Current downloaded Medicare contractor articles listing mapped HCPCS are indexed. NGS J6 Illinois is the default; other-contractor articles are reference only and do not establish Illinois coverage. NCDs, Medicaid and commercial policies are not included.','Latest-version download can omit an earlier in-effect version when a future revision exists.','G/K/N are OPPS indicators; CAH payment and drug waste eligibility cannot be inferred from these letters.','Numeric CPT rows and CPT descriptors are excluded from this free-source reference.','Updates require rebuilding and redeploying; no automatic refresh is configured.']}
+allowable_source, allowable_counts = import_allowables(db, ROOT/'sources/allowables.zip')
+update_manifest(meta, allowable_source, allowable_counts)
 db.execute('INSERT INTO metadata VALUES(?,?)',('manifest',json.dumps(meta)));db.commit();db.execute('VACUUM');db.close()
 meta['database_sha256']=hashlib.sha256(path.read_bytes()).hexdigest();(OUT/'manifest.json').write_text(json.dumps(meta,indent=2))
 print(json.dumps(meta,indent=2));print('Database bytes',path.stat().st_size)

@@ -1,10 +1,11 @@
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-import requests,zipfile,io,json,hashlib
+import requests,zipfile,io,json,hashlib,argparse
 ROOT=Path(__file__).resolve().parents[1]
 (ROOT/'sources').mkdir(parents=True,exist_ok=True)
 SOURCES={
 'crosswalk':('https://www.cms.gov/files/zip/october-2026-ndc-hcpcs-crosswalk-final.zip','2026-10-01'),
+'allowables':('https://www.cms.gov/files/zip/october-2026-medicare-part-b-payment-limit-files-final.zip','2026-10-01'),
 'opps':('https://www.cms.gov/files/zip/October-2026-OPPS-Addendum-B.zip','2026-10-01'),
 'articles':('https://downloads.cms.gov/medicare-coverage-database/downloads/exports/current_article.zip','2026-11-08')}
 def fetch(item):
@@ -23,4 +24,11 @@ def fetch(item):
    for filename in inner.namelist():
     if filename.lower().endswith('.csv'):
      dest=ROOT/'sources'/key/Path(filename).name;dest.parent.mkdir(exist_ok=True);dest.write_bytes(inner.read(filename))
-with ThreadPoolExecutor(max_workers=3) as pool:list(pool.map(fetch,SOURCES.items()))
+parser=argparse.ArgumentParser(description='Download official CMS source snapshots')
+parser.add_argument('--only',choices=list(SOURCES))
+parser.add_argument('--refresh',action='store_true',help='Redownload the selected source(s) instead of reusing cached files')
+args=parser.parse_args()
+items=[(args.only,SOURCES[args.only])] if args.only else list(SOURCES.items())
+if args.refresh:
+ for key,_ in items:(ROOT/'sources'/f'{key}.zip').unlink(missing_ok=True)
+with ThreadPoolExecutor(max_workers=3) as pool:list(pool.map(fetch,items))

@@ -63,6 +63,47 @@ assert.equal(
   scalar("SELECT count(*) FROM policies WHERE effective>'2026-11-16'"),
   0,
 );
+// Published amounts stay at the HCPCS billing-unit level, without a second add-on.
+assert.equal(
+  scalar("SELECT amount_text FROM medicare_allowables WHERE hcpcs='J1756'"),
+  "0.224",
+);
+assert.equal(
+  scalar("SELECT amount_text FROM medicare_allowables WHERE hcpcs='J0897'"),
+  "29.856",
+);
+assert.equal(
+  scalar(
+    "SELECT COUNT(*) FROM medicare_allowables WHERE hcpcs NOT GLOB '[A-Z][0-9][0-9][0-9][0-9]'",
+  ),
+  0,
+);
+assert.equal(
+  scalar("SELECT amount_text FROM medicare_allowables WHERE hcpcs='A9606'"),
+  null,
+);
+assert.equal(
+  scalar(
+    "SELECT COUNT(*) FROM drugs d JOIN medicare_allowables a ON d.hcpcs=a.hcpcs WHERE a.amount_text IS NOT NULL",
+  ),
+  manifest.counts.allowable_packages,
+);
+assert.equal(manifest.counts.allowable_hcpcs, 885);
+assert.equal(manifest.counts.allowable_packages, 7520);
+assert.equal(manifest.sources.allowables.effective, manifest.quarter_start);
+assert.equal(manifest.sources.allowables.effective_end, manifest.quarter_end);
+const embeddedManifest = JSON.parse(
+  scalar("SELECT value FROM metadata WHERE key='manifest'"),
+);
+assert.equal(
+  embeddedManifest.sources.allowables.sha256,
+  manifest.sources.allowables.sha256,
+);
+assert.equal(
+  embeddedManifest.counts.allowable_packages,
+  manifest.counts.allowable_packages,
+);
+assert.ok(!Object.hasOwn(embeddedManifest, "database_chunks"));
 const dom = new JSDOM(
   fs.readFileSync(new URL("index.html", assetDir), "utf8"),
   {
@@ -222,8 +263,51 @@ for (const id of ["detail-dialog", "source-dialog"]) {
 }
 $("results-body").querySelector("button").click();
 assert.match($("detail-content").textContent, /Source conversion needs review/);
+setSearch("J1756", "hcpcs");
+$("results-body").querySelector("button").click();
+assert.equal(
+  $("detail-content").querySelector(".allowable-amount").textContent,
+  "$0.224",
+);
+assert.match(
+  $("detail-content").querySelector(".allowable-unit").textContent,
+  /Per 1 MG/,
+);
+assert.match($("detail-content").textContent, /Medicare Allowable/);
+assert.match($("detail-content").textContent, /not raw ASP/);
+assert.match(
+  $("detail-content").textContent,
+  /not a coverage determination or a CAH reimbursement estimate/,
+);
+assert.match($("detail-content").textContent, /2026-10-01 through 2026-12-31/);
+assert.ok(
+  $("detail-content").querySelector(
+    `a[href="${manifest.sources.allowables.url}"]`,
+  ),
+);
+$("export").click();
+const pricedCsv = await exportedBlob.text();
+assert.match(pricedCsv, /Medicare Allowable \(USD per HCPCS billing unit/);
+assert.match(pricedCsv, /"0.224","1 MG","2026-10-01","2026-12-31"/);
+const missingId = scalar(
+  "SELECT d.id FROM drugs d LEFT JOIN medicare_allowables a ON a.hcpcs=d.hcpcs WHERE a.hcpcs IS NULL LIMIT 1",
+);
+evalIn(`openDetail(${missingId})`);
+assert.equal(
+  $("detail-content").querySelector(".allowable-amount").textContent,
+  "No numeric amount published",
+);
+assert.match($("detail-content").textContent, /does not mean \$0/);
+setSearch("A9606", "hcpcs");
+$("results-body").querySelector("button").click();
+assert.match($("detail-content").textContent, /100% AWP/);
+assert.equal(
+  $("detail-content").querySelector(".allowable-amount").textContent,
+  "No numeric amount published",
+);
 setSearch("J0897", "hcpcs");
 $("results-body").querySelector("button").click();
+assert.match($("detail-content").textContent, /Inflation-adjusted coinsurance/);
 assert.match($("detail-content").textContent, /ICD-10 group/);
 assert.match($("detail-content").textContent, /Group numbers are independent/);
 assert.ok($("detail-content").querySelector('a[href*="articleid=52399"]'));
@@ -316,7 +400,7 @@ await assert.rejects(
   /approved account/,
 );
 console.log(
-  "PASS: database integrity, manifest checksum, public-code scope, exact & normalized NDC lookup, HCPCS & description search, ICD-10 co-listings, parameter safety, SI filters, pagination, unit flags, alternate IDs, policy notes, contractor provenance, scope isolation, new diagnosis relationships, scoped exports and source disclosures.",
+  "PASS: database integrity, manifest checksum, public-code scope, exact & normalized NDC lookup, HCPCS & description search, ICD-10 co-listings, parameter safety, SI filters, pagination, unit flags, alternate IDs, policy notes, contractor provenance, scope isolation, new diagnosis relationships, scoped exports, exact Medicare Allowable amounts and units, pricing notes, missing rates and source disclosures.",
 );
 console.log("Dataset:", JSON.stringify(manifest.counts));
 dom.window.close();
