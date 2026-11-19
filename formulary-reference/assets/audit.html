@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Formulary audit · BPRx Consulting</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="audit.css">
+  <script src="vendor/sql-wasm.js" defer></script>
+  <script src="vendor/fflate-0.8.2.js" defer></script>
+  <script src="data-loader.js?v=private-1" defer></script>
+  <script src="audit-workbook.js" defer></script>
+  <script src="audit.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <a href="./index.html" class="brand">
+    <img class="brand-logo" src="/bprx-logo-transparent.png" alt="BPRx Consulting" width="673" height="115">
+    <span>Formulary<span class="brand-light">Reference</span></span>
+  </a>
+  <nav class="top-actions" aria-label="Reference tools">
+    <a class="text-button" href="./index.html">Back to lookup</a>
+    <a class="text-button" href="/tools/account">Account</a>
+  </nav>
+</header>
+<main class="audit-main">
+  <h1>Audit your formulary</h1>
+  <p>Check the HCPCS codes in your formulary against the CMS NDC crosswalk.</p>
+  <p class="audit-period" id="audit-period" role="status">Loading the CMS reference…</p>
+  <form id="audit-form">
+    <section class="audit-section" aria-labelledby="file-title">
+      <h2 id="file-title">Choose a workbook</h2>
+      <label for="audit-file">Excel workbook (.xlsx, up to 15 MB)</label>
+      <input id="audit-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled>
+      <p>Your workbook stays in this browser. You’ll download a new copy after the review.</p>
+      <p id="file-status" role="status" hidden></p>
+    </section>
+    <section class="audit-section" id="audit-fields" aria-labelledby="fields-title" hidden>
+      <h2 id="fields-title">Confirm your columns</h2>
+      <div class="audit-grid">
+        <label for="sheet-select">Worksheet <select id="sheet-select"></select></label>
+        <label for="header-row">Header row number <input id="header-row" type="number" min="1" max="1048576" step="1" required></label>
+        <label for="ndc-column">NDC column <select id="ndc-column" required></select></label>
+        <label for="hcpcs-column">Submitted HCPCS column <select id="hcpcs-column"></select></label>
+        <label for="description-column">Description column <select id="description-column"></select></label>
+      </div>
+      <p>A 10-digit NDC needs its original hyphens. Use the 11-digit billing NDC to preserve leading zeros.</p>
+      <button class="secondary-button audit-run" id="run-audit" type="submit" disabled>Run audit</button>
+    </section>
+  </form>
+  <p class="audit-error" id="audit-error" role="alert" hidden></p>
+  <section class="audit-section" id="audit-results" aria-labelledby="results-title" hidden>
+    <h2 id="results-title">Audit complete</h2>
+    <dl class="audit-counts">
+      <div><dt>Rows checked</dt><dd id="audit-total">0</dd></div>
+      <div><dt>Codes match</dt><dd id="audit-match">0</dd></div>
+      <div><dt>Codes differ</dt><dd id="audit-different">0</dd></div>
+      <div><dt>Other rows to review</dt><dd id="audit-review">0</dd></div>
+    </dl>
+    <p id="audit-result-summary" role="status"></p>
+    <p>Use the review tab to confirm changes before importing them into your formulary.</p>
+    <a class="secondary-button audit-run" id="audit-download" download>Download reviewed workbook</a>
+  </section>
+</main>
+</body>
+</html>
