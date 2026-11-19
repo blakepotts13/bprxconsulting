@@ -1,0 +1,114 @@
+.workspace {
+  max-width: 1100px;
+  padding-block: 48px 72px;
+}
+.workspace h1 {
+  color: var(--navy);
+  font-size: clamp(32px, 5vw, 50px);
+  margin-bottom: 8px;
+  letter-spacing: -0.03em;
+}
+.intro,
+.panel p {
+  color: var(--muted);
+}
+.panel {
+  padding: clamp(16px, 3vw, 32px);
+  margin-top: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.panel h2 {
+  font-size: clamp(23px, 3vw, 30px);
+  margin: 0 0 10px;
+}
+.notice {
+  background: var(--ice);
+  color: var(--navy2) !important;
+  padding: 12px 15px;
+  border-radius: 8px;
+}
+.navigation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 16px;
+}
+.navigation a {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.navigation a[aria-current="page"] {
+  background: var(--navy);
+  color: white;
+}
+.sources {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+.sources li {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+.sources a {
+  color: var(--blue);
+  font-weight: 700;
+}
+.search label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.search div {
+  display: flex;
+  gap: 10px;
+  max-width: 620px;
+}
+.table {
+  overflow-x: auto;
+}
+.table table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 520px;
+  table-layout: fixed;
+}
+.table th,
+.table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.table thead {
+  background: var(--paper);
+}
+.table thead th:first-child {
+  width: 22%;
+}
+.table th span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+@media (max-width: 540px) {
+  .sources li {
+    grid-template-columns: 1fr auto;
+    font-size: 13px;
+  }
+  .sources strong {
+    grid-column: 1 / -1;
+  }
+}

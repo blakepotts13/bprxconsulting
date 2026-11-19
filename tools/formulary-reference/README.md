@@ -130,3 +130,23 @@ Every admin read and mutation rechecks the current Clerk user on the server.
 Responses are private/no-store; writes additionally require same-origin JSON.
 Tests cover privilege separation, unauthenticated/non-admin denials, origin
 checks, batch limits, invitation behavior, history, and protected administrators.
+
+## Production quarterly preview
+
+Approved users can open **Quarterly updates** from the lookup. The upcoming
+quarter opens at midnight Central on December 15, March 15, June 15, and
+September 15. After the rollover it is available under **Current quarter
+report**. The preview is separate from the effective formulary snapshot.
+
+The GitHub Actions workflow `cms-quarterly-preview.yml` checks official CMS
+publication pages daily, compares available source pairs, and pushes only
+changed public CMS-derived reports to the `cms-quarterly-data` branch. That
+branch has Vercel auto-deploy disabled. The site reads it server side (15-minute
+cache) and gates display by approval and date. January 2027's first HCPCS report
+is also bundled for fallback. Unavailable source pairs display a pending status.
+A failed fetch or parser leaves the previously published report intact.
+
+Run the workflow manually to refresh a particular quarter, or generate a
+comparison locally with `python scripts/quarterly_report.py --quarter 2027-Q1
+--output /tmp/cms-report`. The schedule only publishes the preview and report.
+Use the effective-snapshot refresh workflow above to update the actual lookup.

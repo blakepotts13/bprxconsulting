@@ -1,0 +1,49 @@
+name: Refresh CMS quarterly previews
+
+on:
+  schedule:
+    - cron: "27 12 * * *"
+  workflow_dispatch:
+    inputs:
+      quarter:
+        description: "Optional quarter (YYYY-Q1 through YYYY-Q4), defaults to upcoming quarter"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cms-quarterly-preview
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install CMS workbook readers
+        run: python -m pip install 'requests>=2.32,<3' 'beautifulsoup4>=4.12,<5' 'openpyxl>=3.1,<4'
+      - name: Fetch reports and regenerate comparisons
+        env:
+          REQUESTED_QUARTER: ${{ inputs.quarter }}
+        run: |
+          git fetch origin refs/heads/cms-quarterly-data
+          git worktree add --detach "$RUNNER_TEMP/quarterly-data" FETCH_HEAD
+          args=()
+          if [[ -n "$REQUESTED_QUARTER" ]]; then
+            args+=(--quarter "$REQUESTED_QUARTER")
+          fi
+          python tools/formulary-reference/scripts/quarterly_report.py "${args[@]}" --output "$RUNNER_TEMP/quarterly-data"
+      - name: Publish verified public CMS data to the report branch
+        working-directory: ${{ runner.temp }}/quarterly-data
+        run: |
+          git add -- ????-Q?.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Refresh CMS quarterly reports'
+          git push origin HEAD:refs/heads/cms-quarterly-data
