@@ -59,8 +59,21 @@ test("anonymous users cannot read any reference asset", async () => {
     new URL(html.headers.get("Location")).pathname,
     "/tools/sign-in",
   );
+  const audit = await serveFormularyFile(
+    request("audit.html"),
+    ["audit.html"],
+    signedOut,
+  );
+  assert.equal(audit.status, 303);
+  assert.equal(
+    new URL(audit.headers.get("Location")).searchParams.get("redirect_url"),
+    "/tools/formulary-reference/audit.html",
+  );
   for (const file of [
     "manifest.json",
+    "audit.js",
+    "audit-workbook.js",
+    "vendor/fflate-0.8.2.js",
     "hcpcs-history.json",
     "app.js",
     "data-loader.js",
