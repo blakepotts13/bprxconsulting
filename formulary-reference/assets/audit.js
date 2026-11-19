@@ -215,7 +215,7 @@
           return response.json();
         }),
       ]);
-      const db = new SQL.Database(await FormularyData.loadDatabase(manifest));
+      const db = await FormularyData.openDatabase(SQL, manifest);
       try {
         reference = { index: FormularyAudit.makeIndex(db), manifest };
       } finally {

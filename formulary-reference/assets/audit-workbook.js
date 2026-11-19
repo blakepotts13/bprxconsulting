@@ -324,14 +324,17 @@
   function makeIndex(db) {
     const rows =
       db.exec(
-        "SELECT ndc, hcpcs, drug_name FROM drugs ORDER BY ndc, hcpcs, drug_name",
+        "SELECT ndc, hcpcs, drug_name, mapping_origin FROM drugs ORDER BY ndc, hcpcs, drug_name",
       )[0]?.values || [];
     const index = new Map();
-    for (const [ndc, code, description] of rows) {
+    for (const [ndc, code, description, origin] of rows) {
       if (!/^\d{11}$/.test(ndc) || !/^[A-Z][0-9]{4}$/.test(code)) continue;
       if (!index.has(ndc)) index.set(ndc, new Map());
       const candidates = index.get(ndc);
-      if (!candidates.has(code)) candidates.set(code, description);
+      if (!candidates.has(code)) candidates.set(code, {
+        description,
+        supplemental: origin === "supplemental",
+      });
     }
     return index;
   }
@@ -489,10 +492,15 @@
 
     const normal = ndcCell?.formula ? "" : normalizeNdc(ndc);
     const matches = normal ? index.get(normal) : null;
-    const candidates = matches ? [...matches.keys()] : [];
-    const current = candidates.length === 1 ? candidates[0] : "";
+    const entries = matches ? [...matches] : [];
+    const hasSupplemental = entries.some(([, match]) => match.supplemental);
+    const candidates = entries.map(([code, match]) =>
+      hasSupplemental ? `${code} (${match.supplemental ? "supplemental" : "CMS"})` : code,
+    );
+    const current = !hasSupplemental && candidates.length === 1 ? candidates[0] : "";
     if (!description && matches)
-      description = [...new Set(matches.values())].filter(Boolean).join(" / ");
+      description = [...new Set(entries.map(([, match]) => match.description))]
+        .filter(Boolean).join(" / ");
 
     let status = "";
     if (ndcCell?.formula) status = "Verify formula-based NDC";
@@ -502,6 +510,7 @@
         ? "Ambiguous 10-digit NDC"
         : "Invalid NDC format";
     else if (!candidates.length) status = "No CMS crosswalk listing";
+    else if (hasSupplemental) status = "Verify insulin administration and HCPCS";
     else if (candidates.length > 1) status = "Multiple CMS codes";
     else if (oldCell?.formula) status = "Verify formula-based HCPCS";
     else if (!submitted) status = "Submitted HCPCS missing";
@@ -589,7 +598,9 @@
           result.description,
           result.submitted,
           result.current,
-          result.candidates.length > 1 ? result.candidates.join(", ") : "",
+          result.candidates.length > 1 || (!result.current && result.candidates.length)
+            ? result.candidates.join(", ")
+            : "",
           number,
         ]);
       }
