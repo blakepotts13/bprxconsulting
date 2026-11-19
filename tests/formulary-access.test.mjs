@@ -61,6 +61,7 @@ test("anonymous users cannot read any reference asset", async () => {
   );
   for (const file of [
     "manifest.json",
+    "hcpcs-history.json",
     "app.js",
     "data-loader.js",
     "style.css",
@@ -82,6 +83,7 @@ test("signed-in users without approval are denied, including when the provider i
   for (const file of [
     "index.html",
     "manifest.json",
+    "hcpcs-history.json",
     "vendor/sql-wasm.js",
     "database-01.bin",
   ]) {

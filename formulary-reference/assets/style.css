@@ -10,3 +10,15 @@
 .allowable-note { font-size: 13px; line-height: 1.6; white-space: pre-line; overflow-wrap: anywhere; }
 
 @media(max-width:540px){.topbar{flex-wrap:wrap;row-gap:8px}.topbar .quarterly-link{margin-left:auto;white-space:nowrap}}
+
+.hcpcs-history { margin: 23px 0; }
+.hcpcs-history h4 { margin: 16px 0 6px; font-size: 13px; color: #234b3d; }
+.history-current { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 13px; margin-bottom: 8px; }
+.history-scroll { overflow-x: auto; border: 1px solid #d4dfd7; border-radius: 8px; }
+.history-table { width: 100%; min-width: 360px; border-collapse: collapse; font-size: 12px; }
+.history-table th, .history-table td { padding: 9px; white-space: normal; vertical-align: top; }
+.history-table tbody th { text-align: left; }
+.history-current-tag { display: block; margin-top: 3px; color: #325c4e; font-size: 10px; }
+.history-decision { margin: 15px 0; padding: 14px; border: 1px solid #c4d9d3; border-radius: 8px; background: #f2f8f5; font-size: 12px; line-height: 1.6; }
+.history-decision h4 { margin-top: 0; }
+.history-decision ul { padding-left: 18px; }
