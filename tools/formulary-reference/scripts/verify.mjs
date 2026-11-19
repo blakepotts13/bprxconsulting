@@ -280,7 +280,7 @@ assert.ok(
   "Preserve actual other indicators",
 );
 setSearch("25021-0142-20", "ndc");
-assert.match($("results-body").textContent, /Check unit conversion/);
+assert.match($("exact-ndc-results").textContent, /Check unit conversion/);
 assert.ok(evalIn("unitReview(fetchMatchingPackages()[0])"));
 // Native dialog behavior is the only browser feature stubbed by this DOM test.
 for (const id of ["group-dialog", "detail-dialog", "source-dialog"]) {
@@ -292,9 +292,54 @@ for (const id of ["group-dialog", "detail-dialog", "source-dialog"]) {
   };
 }
 function openFirstPackage() {
+  if (!$("exact-ndc-results").hidden) {
+    $("exact-ndc-results").querySelector(".package-open").click();
+    return;
+  }
   $("results-body").querySelector(".group-button").click();
   $("package-list").querySelector(".package-open").click();
 }
+async function typeSearch(value, inputType = "insertText") {
+  $("search").value = value;
+  $("search").dispatchEvent(new w.InputEvent("input", { inputType }));
+  await new Promise((resolve) => w.setTimeout(resolve, 200));
+}
+setSearch("", "all");
+await typeSearch("00143915525");
+assert.equal($("group-dialog").open, false);
+assert.equal($("detail-dialog").open, true);
+assert.equal(evalIn("state.selected.ndc"), "00143915525");
+assert.match($("detail-content").textContent, /00143-9155-25/);
+$("close-detail").click();
+openFirstPackage();
+assert.equal($("detail-dialog").open, true, "The exact result can be reopened directly");
+assert.equal($("group-dialog").open, false);
+$("close-detail").click();
+
+await typeSearch("00407-2943-1");
+assert.equal($("detail-dialog").open, false, "Wait for a possible second package digit");
+await typeSearch("00407-2943-12");
+assert.equal($("detail-dialog").open, true);
+assert.equal(evalIn("state.selected.ndc"), "00407294312");
+$("close-detail").click();
+await typeSearch("00407-2943-1", "insertFromPaste");
+assert.equal($("detail-dialog").open, true);
+assert.equal(evalIn("state.selected.ndc"), "00407294301");
+$("close-detail").click();
+
+setSearch("0517-2340-10", "ndc");
+$("search").dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter" }));
+assert.equal($("detail-dialog").open, true, "Enter immediately opens a normalized NDC");
+assert.equal(evalIn("state.selected.ndc"), "00517234010");
+$("close-detail").click();
+await typeSearch("5172340010");
+assert.equal($("detail-dialog").open, false);
+assert.match($("search-note").textContent, /ambiguous/);
+setSearch("99999-9999-99", "ndc");
+assert.equal($("empty").hidden, false);
+assert.equal($("exact-ndc-results").hidden, true);
+
+setSearch("25021-0142-20", "ndc");
 openFirstPackage();
 assert.match($("detail-content").textContent, /Source conversion needs review/);
 setSearch("J1756", "hcpcs");
@@ -395,12 +440,15 @@ setSearch("00517-2340-10", "ndc");
 openFirstPackage();
 await evalIn("renderHcpcsHistory(state.selected, $('hcpcs-history'))");
 assert.match($("hcpcs-history").textContent, /CMS listed J1756 for this NDC/);
-assert.equal($("results-body").querySelectorAll(".group-button").length, 1);
-assert.match($("results-body").textContent, /1 match current filters/);
+assert.equal($("group-results").hidden, true);
+assert.equal($("exact-ndc-results").children.length, 1);
 $("close-detail").click();
+setSearch("00517-2340", "ndc");
+assert.equal($("results-body").querySelectorAll(".group-button").length, 1);
+assert.equal($("exact-ndc-results").hidden, true);
+$("results-body").querySelector(".group-button").click();
 assert.equal($("group-dialog").open, true);
 assert.equal($("package-list").children.length, 26);
-assert.match($("package-list").firstElementChild.textContent, /00517-2340-10/);
 function searchPackages(term) {
   $("package-search").value = term;
   $("package-search").dispatchEvent(new w.Event("input"));
@@ -542,8 +590,22 @@ assert.match($("detail-content").textContent, /CMS also lists this NDC under J18
 assert.doesNotMatch($("detail-content").textContent, /Download original CMS crosswalk/);
 $("close-detail").click();
 $("close-group").click();
-setSearch("00002-7510-01", "ndc");
+setSearch("", "ndc");
+await typeSearch("00002-7510-01");
 assert.deepEqual(Array.from(groups(), (group) => group.hcpcs).sort(), ["J1815", "J1817"]);
+assert.equal($("group-results").hidden, true);
+assert.equal($("exact-ndc-results").children.length, 2);
+assert.equal($("detail-dialog").open, false, "Keep both mappings available for a shared NDC");
+for (const code of ["J1815", "J1817"]) {
+  [...$("exact-ndc-results").querySelectorAll(".package-open")]
+    .find((button) => button.querySelector(".hcpcs-pill").textContent === code)
+    .click();
+  assert.equal($("group-dialog").open, false);
+  assert.equal($("detail-dialog").open, true);
+  assert.equal(evalIn("state.selected.ndc"), "00002751001");
+  assert.equal(evalIn("state.selected.hcpcs"), code);
+  $("close-detail").click();
+}
 const corrupt = {
   ...manifest,
   database_chunks: manifest.database_chunks.map((c, i) =>
