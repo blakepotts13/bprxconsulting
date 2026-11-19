@@ -339,6 +339,17 @@
     return index;
   }
 
+  function missingNdcs(sheet, fields, index) {
+    const missing = new Set();
+    for (const [number, row] of sheet.rows) {
+      if (number <= fields.header) continue;
+      const cell = row.cells.get(fields.ndc);
+      const ndc = cell?.formula ? "" : normalizeNdc(cell?.value || "");
+      if (ndc && !index.has(ndc)) missing.add(ndc);
+    }
+    return [...missing];
+  }
+
   function writeTextCell(doc, row, column, addressRow, value) {
     const cell = doc.createElementNS(spreadsheetNs, "c");
     cell.setAttribute("r", columnName(column) + addressRow);
@@ -385,6 +396,9 @@
         "Current HCPCS (CMS)",
         "Candidate HCPCS",
         "Source row",
+        "Assigned HCPCS (DailyMed fallback)",
+        "DailyMed label",
+        "DailyMed review note",
       ],
     ];
     if (!reviews.length) examples.push(["No rows need review"]);
@@ -406,7 +420,7 @@
     );
     views.append(view);
     const widths = element("cols");
-    [30, 20, 48, 20, 22, 28, 13].forEach((width, index) => {
+    [34, 20, 48, 20, 22, 28, 13, 32, 48, 56].forEach((width, index) => {
       widths.append(
         element("col", {
           min: index + 1,
@@ -427,7 +441,7 @@
     root.append(views, widths, data);
     if (reviews.length)
       root.append(
-        element("autoFilter", { ref: "A2:G" + (reviews.length + 2) }),
+        element("autoFilter", { ref: "A2:J" + (reviews.length + 2) }),
       );
     return doc;
   }
@@ -475,7 +489,7 @@
     };
   }
 
-  function comparison(row, fields, index) {
+  function comparison(row, fields, index, dailyMed) {
     const ndcCell = row.cells.get(fields.ndc);
     const oldCell = row.cells.get(fields.hcpcs);
     const ndc = ndcCell?.value || "";
@@ -492,6 +506,7 @@
 
     const normal = ndcCell?.formula ? "" : normalizeNdc(ndc);
     const matches = normal ? index.get(normal) : null;
+    const fallback = normal && !matches ? dailyMed.get(normal) : null;
     const entries = matches ? [...matches] : [];
     const hasSupplemental = entries.some(([, match]) => match.supplemental);
     const candidates = entries.map(([code, match]) =>
@@ -501,6 +516,7 @@
     if (!description && matches)
       description = [...new Set(entries.map(([, match]) => match.description))]
         .filter(Boolean).join(" / ");
+    if (!description && fallback?.name) description = fallback.name;
 
     let status = "";
     if (ndcCell?.formula) status = "Verify formula-based NDC";
@@ -509,6 +525,9 @@
       status = /^\d{10}$/.test(ndc)
         ? "Ambiguous 10-digit NDC"
         : "Invalid NDC format";
+    else if (fallback?.status === "assigned") status = "DailyMed fallback assigned";
+    else if (fallback?.status === "review") status = "DailyMed package needs coding review";
+    else if (fallback?.status === "unavailable") status = "DailyMed lookup unavailable";
     else if (!candidates.length) status = "No CMS crosswalk listing";
     else if (hasSupplemental) status = "Verify insulin administration and HCPCS";
     else if (candidates.length > 1) status = "Multiple CMS codes";
@@ -517,10 +536,10 @@
     else if (!/^[A-Z0-9][0-9]{4}$/i.test(submitted))
       status = "Check submitted HCPCS format";
     else if (current !== submitted.toUpperCase()) status = "Code differs";
-    return { ndc, description, submitted, current, candidates, status };
+    return { ndc, description, submitted, current, candidates, status, fallback };
   }
 
-  function audit(workbook, sheet, fields, index, manifest) {
+  function audit(workbook, sheet, fields, index, manifest, dailyMed = new Map()) {
     const { header, ndc, hcpcs, description } = fields;
     const headerRow = sheet.rows.get(header);
     if (
@@ -539,14 +558,19 @@
       ? columnNumber(endRef)
       : 0;
     const column = Math.max(sheet.maxColumn, dimensionWidth) + 1;
-    if (column > maxExcelColumns)
+    const hasFallback = [...dailyMed.values()].some(({ status }) => status === "assigned");
+    const lastColumn = column + Number(hasFallback);
+    if (lastColumn > maxExcelColumns)
       throw new Error(
-        "There is no spare column in this sheet. Remove unused columns and try again.",
+        "This sheet needs more spare columns for the audit results. Remove unused columns and try again.",
       );
     const existingHeaders = new Set(
       [...headerRow.cells.values()].map((entry) => entry.value.toLowerCase()),
     );
     const heading = uniqueName("Current HCPCS (CMS)", existingHeaders);
+    const fallbackHeading = hasFallback
+      ? uniqueName("Assigned HCPCS (DailyMed fallback)", existingHeaders)
+      : "";
     const reviewName = uniqueName(
       "HCPCS Review",
       new Set(
@@ -571,7 +595,7 @@
     ) {
       const col = sheet.doc.createElementNS(spreadsheetNs, "col");
       col.setAttribute("min", column);
-      col.setAttribute("max", column);
+      col.setAttribute("max", lastColumn);
       col.setAttribute("width", "23");
       col.setAttribute("customWidth", "1");
       const nextCol = children(cols, "col").find(
@@ -580,14 +604,19 @@
       cols.insertBefore(col, nextCol || null);
     }
     writeTextCell(sheet.doc, headerRow.node, column, header, heading);
+    if (fallbackHeading)
+      writeTextCell(sheet.doc, headerRow.node, lastColumn, header, fallbackHeading);
     let lastRow = header;
     for (const [number, row] of sheet.rows) {
       if (number <= header) continue;
-      const result = comparison(row, fields, index);
+      const result = comparison(row, fields, index, dailyMed);
       if (!result) continue;
       counts.total++;
       if (result.current)
         writeTextCell(sheet.doc, row.node, column, number, result.current);
+      const fallback = result.fallback;
+      if (fallback?.status === "assigned")
+        writeTextCell(sheet.doc, row.node, lastColumn, number, fallback.hcpcs);
       if (!result.status) counts.matched++;
       else {
         if (result.status === "Code differs") counts.different++;
@@ -600,8 +629,12 @@
           result.current,
           result.candidates.length > 1 || (!result.current && result.candidates.length)
             ? result.candidates.join(", ")
-            : "",
+            : (fallback?.specificCodes || []).map(([code]) => code).join(", "),
           number,
+          fallback?.hcpcs || "",
+          fallback?.labelUrl || "",
+          fallback?.reason ||
+            (fallback?.status === "assigned" ? "Confirm payer coverage and billing units." : ""),
         ]);
       }
       lastRow = Math.max(lastRow, number);
@@ -615,7 +648,7 @@
       const endRow = Number(endRef.match(/\d+$/)?.[0]) || 0;
       dimension.setAttribute(
         "ref",
-        firstRef + ":" + columnName(column) + Math.max(lastRow, endRow),
+        firstRef + ":" + columnName(lastColumn) + Math.max(lastRow, endRow),
       );
     }
     const period = [
@@ -643,6 +676,7 @@
       counts,
       reviewName,
       heading,
+      fallbackHeading,
     };
   }
 
@@ -653,6 +687,7 @@
     guessHeader,
     headerFields,
     makeIndex,
+    missingNdcs,
     audit,
   };
 })();

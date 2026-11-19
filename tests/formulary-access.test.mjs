@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { isApprovedFormularyUser } from "../lib/formulary-policy.mjs";
 import { serveFormularyFile } from "../lib/formulary-files.mjs";
+import { assignFallback, lookupDailymed } from "../lib/formulary-dailymed.mjs";
 
 const approved = async () => ({ status: "approved" });
 const assets = path.join(process.cwd(), "formulary-reference/assets");
@@ -78,6 +79,7 @@ test("anonymous users cannot read any reference asset", async () => {
     "app.js",
     "data-loader.js",
     "j1815-packages.json",
+    "dailymed.json",
     "style.css",
     "vendor/sql-wasm.wasm",
     "database-01.bin",
@@ -99,6 +101,7 @@ test("signed-in users without approval are denied, including when the provider i
     "manifest.json",
     "hcpcs-history.json",
     "j1815-packages.json",
+    "dailymed.json",
     "vendor/sql-wasm.js",
     "database-01.bin",
   ]) {
@@ -121,8 +124,80 @@ test("signed-in users without approval are denied, including when the provider i
   }
 });
 
+test("DailyMed fallback requires exact label verification and preserves specific-code review", async () => {
+  const setid = "7a8d2539-4422-4312-0298-207ef1a2948e";
+  const fixture = {
+    product_ndc: "0409-3613",
+    brand_name: "Bupivacaine Spinal",
+    generic_name: "Bupivacaine hydrochloride in dextrose",
+    packaging: [{ package_ndc: "0409-3613-01" }],
+    product_type: "HUMAN PRESCRIPTION DRUG",
+    marketing_category: "ANDA",
+    route: ["SUBARACHNOID"],
+    dosage_form: "INJECTION, SOLUTION",
+    openfda: { spl_set_id: [setid] },
+  };
+  const mockFetch = async (value) => {
+    const url = new URL(value);
+    if (url.hostname === "api.fda.gov")
+      return Response.json({ results: [fixture] });
+    if (url.pathname.endsWith("/packaging.json"))
+      return Response.json({
+        data: {
+          products: [
+            {
+              product_code: fixture.product_ndc,
+              packaging: [{ ndc: "0409-3613-01" }],
+            },
+          ],
+        },
+      });
+    if (url.pathname.endsWith("/spls.json"))
+      return Response.json({ data: [{ setid }] });
+    throw new Error(
+      "A possible specific code should short-circuit fallback classification",
+    );
+  };
+  const match = await lookupDailymed("00409361301", assets, mockFetch);
+  assert.equal(match.status, "review");
+  assert.ok(match.specificCodes.some(([code]) => code === "J0665"));
+  assert.equal(match.hcpcs, undefined);
+
+  const oral = { ...fixture, dosage_form: "TABLET", route: ["ORAL"] };
+  assert.equal(assignFallback(oral, ["J01CA"], []).hcpcs, "J8499");
+  assert.equal(assignFallback(fixture, ["N01BB"], []).hcpcs, "J3490");
+  assert.equal(assignFallback(oral, ["L01BC"], []).hcpcs, undefined);
+  assert.equal(assignFallback(oral, [], []).hcpcs, undefined);
+  assert.equal(
+    assignFallback({ ...fixture, marketing_category: "BLA" }, ["A10AB"], [])
+      .hcpcs,
+    undefined,
+  );
+  assert.equal(
+    assignFallback({ ...oral, product_type: "HUMAN OTC DRUG" }, ["N02BE"], [])
+      .hcpcs,
+    undefined,
+  );
+  const invalid = await serveFormularyFile(
+    request("dailymed.json?ndc=123"),
+    ["dailymed.json"],
+    approved,
+  );
+  assert.equal(invalid.status, 400);
+});
+
 test("supplemental packages are served only through the approved, uncached route", async (t) => {
-  const fixture = [["12345-0001-01", "Example insulin", "Example labeler", 3, 1, 100, "FDA NDC Directory"]];
+  const fixture = [
+    [
+      "12345-0001-01",
+      "Example insulin",
+      "Example labeler",
+      3,
+      1,
+      100,
+      "FDA NDC Directory",
+    ],
+  ];
   const payload = JSON.stringify(fixture);
   const previous = process.env.FORMULARY_J1815_PACKAGES;
   t.after(() => {

@@ -141,6 +141,21 @@ vm.runInContext(
   dom.getInternalVMContext(),
 );
 w.fetch = async (url) => {
+  if (url === "dailymed.json?ndc=00093226301") {
+    return {
+      ok: true,
+      json: async () => ({
+        status: "assigned",
+        hcpcs: "J8499",
+        name: "Amoxicillin",
+        packageNdc: "0093-2263-01",
+        routes: ["ORAL"],
+        ingredients: [{ name: "Amoxicillin", strength: "500 mg" }],
+        labelUrl:
+          "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=4c0f348a-a65d-409c-8668-207c82a5e3cb",
+      }),
+    };
+  }
   if (url === "j1815-packages.json")
     return { ok: true, json: async () => [] };
   if (url === "hcpcs-history.json")
@@ -339,7 +354,18 @@ setSearch("99999-9999-99", "ndc");
 assert.equal($("empty").hidden, false);
 assert.equal($("exact-ndc-results").hidden, true);
 
+await typeSearch("00093-2263-01");
+assert.match($("dailymed-result").textContent, /J8499/);
+assert.match(
+  $("dailymed-result").textContent,
+  /Assigned by DailyMed fallback rule/,
+);
+assert.match($("dailymed-result").textContent, /500 mg/);
+assert.equal($("detail-dialog").open, false);
+assert.equal($("empty").hidden, true);
+
 setSearch("25021-0142-20", "ndc");
+assert.equal($("dailymed-result").hidden, true);
 openFirstPackage();
 assert.match($("detail-content").textContent, /Source conversion needs review/);
 setSearch("J1756", "hcpcs");

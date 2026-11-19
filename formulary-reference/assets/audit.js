@@ -12,6 +12,7 @@
     hcpcs: $("hcpcs-column"),
     description: $("description-column"),
   };
+  const columnControls = [sheets, header, ...Object.values(fields)];
   let reference;
   let workbook;
   let sheet;
@@ -64,6 +65,8 @@
   fileInput.addEventListener("change", async () => {
     const generation = ++uploadGeneration;
     const file = fileInput.files?.[0];
+    columnControls.forEach((control) => { control.disabled = false; });
+    run.textContent = "Run audit";
     clearResult();
     error();
     workbook = null;
@@ -138,6 +141,20 @@
     }),
   );
 
+  async function lookupMissingPackages(ndcs, generation) {
+    const results = new Map();
+    for (let offset = 0; offset < ndcs.length && uploadGeneration === generation; offset += 3) {
+      const batch = ndcs.slice(offset, offset + 3);
+      setFileStatus(`Checking missing NDCs in DailyMed (${offset + 1}–${offset + batch.length} of ${ndcs.length})…`);
+      const [found] = await Promise.all([
+        Promise.all(batch.map((ndc) => FormularyData.lookupDailymed(ndc))),
+        new Promise((resolve) => setTimeout(resolve, 1000)),
+      ]);
+      batch.forEach((ndc, i) => results.set(ndc, found[i]));
+    }
+    return results;
+  }
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!workbook || !reference || run.disabled) return;
@@ -153,6 +170,7 @@
     const filename = fileName;
     const generation = uploadGeneration;
     run.disabled = true;
+    columnControls.forEach((control) => { control.disabled = true; });
     run.textContent = "Checking formulary…";
     try {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -161,17 +179,22 @@
         workbook,
         workbook.sheets[selected],
       );
+      const missing = FormularyAudit.missingNdcs(freshSheet, selection, reference.index);
+      const dailyMed = await lookupMissingPackages(missing, generation);
+      if (uploadGeneration !== generation) return;
       const {
         bytes: result,
         counts,
         reviewName,
         heading,
+        fallbackHeading,
       } = FormularyAudit.audit(
         workbook,
         freshSheet,
         selection,
         reference.index,
         reference.manifest,
+        dailyMed,
       );
       downloadUrl = URL.createObjectURL(
         new Blob([result], {
@@ -189,14 +212,18 @@
         $(id).textContent = new Intl.NumberFormat("en-US").format(value);
       }
       $("audit-result-summary").textContent =
-        `The workbook adds “${heading}” to ${freshSheet.name} and lists differences and exceptions on “${reviewName}”.`;
+        `The workbook adds “${heading}”${fallbackHeading ? ` and “${fallbackHeading}”` : ""} to ${freshSheet.name} and lists differences and exceptions on “${reviewName}”.`;
       $("audit-results").hidden = false;
       $("audit-download").focus();
     } catch (failure) {
       error(failure.message || "The reviewed workbook could not be created.");
     } finally {
-      run.textContent = "Run audit";
-      if (uploadGeneration === generation) run.disabled = false;
+      if (uploadGeneration === generation) {
+        setFileStatus();
+        run.textContent = "Run audit";
+        columnControls.forEach((control) => { control.disabled = false; });
+        run.disabled = false;
+      }
     }
   });
 
