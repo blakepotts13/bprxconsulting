@@ -104,6 +104,28 @@ assert.equal(
   manifest.counts.allowable_packages,
 );
 assert.ok(!Object.hasOwn(embeddedManifest, "database_chunks"));
+const history = JSON.parse(
+  fs.readFileSync(new URL("hcpcs-history.json", assetDir), "utf8"),
+);
+assert.equal(history.sources.length, 20);
+assert.equal(
+  history.sources.at(-1).quarter,
+  manifest.quarter.replace(" ", "-"),
+);
+assert.equal(history.sources[0].quarter, "2022-Q1");
+assert.ok(Object.keys(history.items).every((ndc) => /^\d{11}$/.test(ndc)));
+for (const [ndc, codes] of [
+  ["00009028003", ["J1030", "J1010"]],
+  ["00009000302", ["J2930", "J2919"]],
+]) {
+  const rows = history.items[ndc];
+  assert.deepEqual(
+    rows.map((row) => row[2]),
+    codes,
+  );
+  assert.equal(history.sources[rows[0][1]].quarter, "2024-Q1");
+  assert.equal(history.sources[rows[1][0]].quarter, "2024-Q2");
+}
 const dom = new JSDOM(
   fs.readFileSync(new URL("index.html", assetDir), "utf8"),
   {
@@ -119,6 +141,8 @@ vm.runInContext(
   dom.getInternalVMContext(),
 );
 w.fetch = async (url) => {
+  if (url === "hcpcs-history.json")
+    return { ok: true, json: async () => history };
   if (url.startsWith("manifest.json"))
     return { ok: true, json: async () => manifest };
   const chunk = fs.readFileSync(new URL(url, assetDir));
@@ -319,6 +343,50 @@ setSearch("888867413689", "ndc");
 $("results-body").querySelector("button").click();
 assert.match($("detail-content").textContent, /alternate identifier/);
 
+await evalIn("renderHcpcsHistory(state.selected, $('hcpcs-history'))");
+assert.match(
+  $("hcpcs-history").textContent,
+  /Exact-NDC history is unavailable/,
+);
+assert.equal($("hcpcs-history").querySelector("table"), null);
+
+for (const [ndc, active, old, otherOld, newUnit] of [
+  ["00009-0280-03", "J1010", "J1030", "J1020", "1 MG"],
+  ["00009-0003-02", "J2919", "J2930", "J2920", "5 MG"],
+]) {
+  setSearch(ndc, "ndc");
+  $("results-body").querySelector("button").click();
+  await evalIn("renderHcpcsHistory(state.selected, $('hcpcs-history'))");
+  const panel = $("hcpcs-history");
+  const timeline = panel.querySelector("tbody");
+  assert.match(timeline.textContent, new RegExp(active));
+  assert.match(timeline.textContent, new RegExp(newUnit));
+  assert.match(timeline.textContent, new RegExp(old));
+  assert.doesNotMatch(timeline.textContent, new RegExp(otherOld));
+  assert.match(timeline.textContent, /Q1 2024/);
+  assert.match(timeline.textContent, /Q2 2024/);
+  assert.ok(
+    timeline.querySelector('a[href*="april-2024-asp-ndc-hcpcs-crosswalk"]'),
+  );
+  assert.match(
+    panel.querySelector(".history-decision").textContent,
+    new RegExp(otherOld),
+  );
+  assert.match(
+    panel.querySelector(".history-decision").textContent,
+    /2024-04-01/,
+  );
+  assert.match(
+    panel.querySelector(".history-decision").textContent,
+    /2024-03-31/,
+  );
+}
+setSearch("00517-2340-10", "ndc");
+$("results-body").querySelector("button").click();
+await evalIn("renderHcpcsHistory(state.selected, $('hcpcs-history'))");
+assert.match($("hcpcs-history").textContent, /CMS listed J1756 for this NDC/);
+assert.equal($("hcpcs-history").querySelector(".history-decision"), null);
+
 setSearch("J7207", "hcpcs");
 assert.ok(rows().length > 0);
 assert.ok(
@@ -388,7 +456,10 @@ assert.equal(new URL(w.location.href).searchParams.has("scope"), false);
 $("sources-button").click();
 assert.match($("source-content").textContent, /No patient information/);
 assert.match($("source-content").textContent, /not included/);
-assert.equal(w.document.querySelectorAll("th").length, 7);
+assert.equal(
+  w.document.querySelectorAll(".results-section thead th").length,
+  7,
+);
 const corrupt = {
   ...manifest,
   database_chunks: manifest.database_chunks.map((c, i) =>
@@ -404,7 +475,7 @@ await assert.rejects(
   /approved account/,
 );
 console.log(
-  "PASS: database integrity, manifest checksum, public-code scope, exact & normalized NDC lookup, HCPCS & description search, ICD-10 co-listings, parameter safety, SI filters, pagination, unit flags, alternate IDs, policy notes, contractor provenance, scope isolation, new diagnosis relationships, scoped exports, exact Medicare Allowable amounts and units, pricing notes, missing rates and source disclosures.",
+  "PASS: database integrity, manifest checksum, public-code scope, exact & normalized NDC lookup, HCPCS & description search, ICD-10 co-listings, parameter safety, SI filters, pagination, unit flags, alternate IDs, policy notes, contractor provenance, scope isolation, new diagnosis relationships, scoped exports, exact Medicare Allowable amounts and units, pricing notes, missing rates, exact-NDC HCPCS history, and source disclosures.",
 );
 console.log("Dataset:", JSON.stringify(manifest.counts));
 dom.window.close();

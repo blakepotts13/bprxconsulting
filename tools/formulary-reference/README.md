@@ -56,6 +56,22 @@ update and validate the URL/quarter/date constants in `medicare_allowable.py`,
 the fetch source URL, and the crosswalk snapshot together. The importer rejects
 unexpected periods, malformed amounts, duplicate HCPCS rates, and mixed quarters.
 
+### HCPCS history by item
+
+The active drug details show the codes and billing-unit descriptions listed for
+the same 11-digit package NDC in archived CMS crosswalks. The bundled data spans
+2022 Q1 through the effective lookup quarter. Consecutive listings with the same
+code and unit appear as a range. Missing quarters are left as gaps. Ambiguous
+identifiers and drug-name matching are excluded. The methylprednisolone
+formulation-level CMS decision is shown separately from item observations.
+
+After rebuilding the lookup for a new effective quarter, run
+`python scripts/build_hcpcs_history.py` from this directory. It uses the lookup
+manifest's quarter, downloads the CMS archives and generates the private history
+asset with source URLs and archive hashes. `--cached` reuses locally saved
+downloads during development. An unsuccessful rebuild leaves the last generated
+file available. Review the source changes before publishing.
+
 ## Refresh workflow
 
 Refreshes are manual; there is no automatic CMS feed or scheduled job. Use Python with `requirements.txt` in an isolated virtual environment.
