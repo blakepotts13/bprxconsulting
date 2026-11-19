@@ -50,6 +50,8 @@ test("workbook audit preserves submitted values and flags ambiguous rows without
       row(7, ["Unlisted", "99999999999", null]),
       row(8, ["Multiple", "00069130510", null]),
       row(9, ["Missing", null, "J1938"]),
+      row(10, ["Insulin with overlapping mappings", "00002-7510-01", "J1817"]),
+      row(11, ["Supplemental insulin only", "12345-0001-01", "J1815"]),
     ].join("");
     const other = `<worksheet xmlns="${ns}"><sheetData><row r="1"><c r="A1"><f>1+1</f><v>2</v></c></row></sheetData></worksheet>`;
     const parts = {
@@ -85,6 +87,9 @@ test("workbook audit preserves submitted values and flags ambiguous rows without
             ["00517234010", "J1756", "Venofer"],
             ["00069130510", "Q5105", "Epoetin"],
             ["00069130510", "Q5106", "Epoetin"],
+            ["00002751001", "J1815", "Humalog", "supplemental"],
+            ["00002751001", "J1817", "Humalog", "cms"],
+            ["12345000101", "J1815", "Insulin", "supplemental"],
           ],
         },
       ],
@@ -100,7 +105,7 @@ test("workbook audit preserves submitted values and flags ambiguous rows without
     const output = run();
     assert.deepEqual(
       { ...output.counts },
-      { total: 7, matched: 1, different: 1, review: 5 },
+      { total: 9, matched: 1, different: 1, review: 7 },
     );
     assert.equal(output.reviewName, "HCPCS Review (2)");
     assert.equal(
@@ -119,7 +124,7 @@ test("workbook audit preserves submitted values and flags ambiguous rows without
       /<c r="(?:C3|D3)"[^>]*>[^]*J1030[^]*<c r="D3"[^>]*>[^]*J1010/,
     );
     assert.match(xml, /<c r="D5"[^>]*>[^]*J1756/);
-    assert.doesNotMatch(xml, /r="D[6-9]"/);
+    assert.doesNotMatch(xml, /r="D(?:[6-9]|10|11)"/);
     assert.equal(zip.strFromU8(result["xl/worksheets/sheet2.xml"]), other);
     const review = zip.strFromU8(result["xl/worksheets/bprx-audit.xml"]);
     assert.match(review, /Code differs/);
@@ -128,6 +133,8 @@ test("workbook audit preserves submitted values and flags ambiguous rows without
     assert.match(review, /No CMS crosswalk listing/);
     assert.match(review, /NDC missing/);
     assert.match(review, /Multiple CMS codes.*Q5105, Q5106/);
+    assert.match(review, /Verify insulin administration and HCPCS.*J1815 \(supplemental\), J1817 \(CMS\)/);
+    assert.match(review, /12345-0001-01.*J1815 \(supplemental\)/);
     assert.match(
       review,
       /t="inlineStr"><is><t xml:space="preserve">=Literal description/,

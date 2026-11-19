@@ -141,6 +141,8 @@ vm.runInContext(
   dom.getInternalVMContext(),
 );
 w.fetch = async (url) => {
+  if (url === "j1815-packages.json")
+    return { ok: true, json: async () => [] };
   if (url === "hcpcs-history.json")
     return { ok: true, json: async () => history };
   if (url.startsWith("manifest.json"))
@@ -511,6 +513,37 @@ assert.equal(
   w.document.querySelectorAll(".results-section thead th").length,
   5,
 );
+$("close-sources").click();
+const regularFetch = w.fetch;
+w.fetch = async (url) =>
+  url === "j1815-packages.json"
+    ? {
+        ok: true,
+        json: async () => [
+          ["00002-7510-01", "Humalog", "Example labeler", 10, 1, 100, "FDA NDC Directory"],
+          ["12345-0001-01", "Example insulin", "Example labeler", null, null, null, "Document only"],
+        ],
+      }
+    : regularFetch(url);
+w.supplementalDb = await w.FormularyData.openDatabase(SQL, manifest);
+evalIn("state.db.close(); state.db=supplementalDb; state.groups=loadGroupSummaries();");
+delete w.supplementalDb;
+setSearch("J1815", "hcpcs");
+assert.equal(rows().length, 2);
+assert.equal(groups()[0].si, "N");
+assert.match($("results-body").textContent, /Supplemental mapping/);
+$("results-body").querySelector(".group-button").click();
+assert.match($("package-list").textContent, /200 HCPCS units per item/);
+assert.match($("package-list").textContent, /Billing units need label review/);
+[...$("package-list").querySelectorAll("button")]
+  .find((button) => button.textContent.includes("00002-7510-01"))
+  .click();
+assert.match($("detail-content").textContent, /CMS also lists this NDC under J1817/);
+assert.doesNotMatch($("detail-content").textContent, /Download original CMS crosswalk/);
+$("close-detail").click();
+$("close-group").click();
+setSearch("00002-7510-01", "ndc");
+assert.deepEqual(Array.from(groups(), (group) => group.hcpcs).sort(), ["J1815", "J1817"]);
 const corrupt = {
   ...manifest,
   database_chunks: manifest.database_chunks.map((c, i) =>

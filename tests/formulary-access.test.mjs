@@ -77,6 +77,7 @@ test("anonymous users cannot read any reference asset", async () => {
     "hcpcs-history.json",
     "app.js",
     "data-loader.js",
+    "j1815-packages.json",
     "style.css",
     "vendor/sql-wasm.wasm",
     "database-01.bin",
@@ -97,6 +98,7 @@ test("signed-in users without approval are denied, including when the provider i
     "index.html",
     "manifest.json",
     "hcpcs-history.json",
+    "j1815-packages.json",
     "vendor/sql-wasm.js",
     "database-01.bin",
   ]) {
@@ -117,6 +119,22 @@ test("signed-in users without approval are denied, including when the provider i
       503,
     );
   }
+});
+
+test("supplemental packages are served only through the approved, uncached route", async (t) => {
+  const fixture = [["12345-0001-01", "Example insulin", "Example labeler", 3, 1, 100, "FDA NDC Directory"]];
+  const payload = JSON.stringify(fixture);
+  const previous = process.env.FORMULARY_J1815_PACKAGES;
+  t.after(() => {
+    if (previous === undefined) delete process.env.FORMULARY_J1815_PACKAGES;
+    else process.env.FORMULARY_J1815_PACKAGES = previous;
+  });
+  process.env.FORMULARY_J1815_PACKAGES = payload;
+  const file = "j1815-packages.json";
+  const response = await serveFormularyFile(request(file), [file], approved);
+  assert.deepEqual(await response.json(), fixture);
+  assert.match(response.headers.get("Cache-Control"), /private, no-store/);
+  assert.match(response.headers.get("Vary"), /Cookie/);
 });
 
 test("approved users get complete, integrity-checked chunks under the response size limit", async () => {

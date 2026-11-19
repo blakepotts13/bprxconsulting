@@ -56,6 +56,20 @@ update and validate the URL/quarter/date constants in `medicare_allowable.py`,
 the fetch source URL, and the crosswalk snapshot together. The importer rejects
 unexpected periods, malformed amounts, duplicate HCPCS rates, and mixed quarters.
 
+### Supplemental J1815 mappings
+
+The production secret `FORMULARY_J1815_PACKAGES` contains a JSON array of
+supplemental package rows. Each row holds the hyphenated 11-digit NDC, drug name,
+labeler, volume in mL, items per pack, insulin units per mL, and package source.
+The three numeric fields are null when the package could not be verified.
+The approved-user route serves this data with private cache headers. Keep the
+supplied document and its extracted rows out of the public repository.
+
+The lookup loads these rows alongside the verified CMS database. CMS mappings
+are retained, and the workbook flags any supplemental match for review without
+populating the CMS result column. Recheck the J1815 descriptor and OPPS indicator
+when updating the CMS snapshot.
+
 ### HCPCS history by item
 
 The active drug details show the codes and billing-unit descriptions listed for
