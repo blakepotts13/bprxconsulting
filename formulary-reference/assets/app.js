@@ -1,6 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const state = {db:null,manifest:null,mode:'all',page:0,total:0,resultCount:0,perPage:25,rows:[],groups:new Map(),timer:null,selected:null};
+const state = {db:null,manifest:null,mode:'all',page:0,total:0,resultCount:0,perPage:25,rows:[],groups:new Map(),timer:null,selected:null,dailyMedNdc:''};
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = n => n==null ? 'Not specified' : Number(n).toLocaleString('en-US',{maximumFractionDigits:8});
 const siNames={G:'Pass-through drug or biological (OPPS)',K:'Separately payable non-pass-through drug or biological (OPPS)',N:'Packaged into OPPS payment'};
@@ -107,7 +107,8 @@ function groupRow(group){
 }
 function render(openExact=false){
  if(!state.db)return;
- const packages=exactNdcQuery()?fetchMatchingPackages():null;
+ const ndc=exactNdcQuery();
+ const packages=ndc?fetchMatchingPackages():null;
  const pageStart=state.page*state.perPage;
  if(packages){
   state.total=state.resultCount=packages.length;
@@ -144,9 +145,42 @@ function render(openExact=false){
  if((state.mode==='ndc'||state.mode==='all')&&/^\d{10}$/.test(q))note='This unhyphenated 10-digit NDC is ambiguous. Enter its original hyphens (4-4-2, 5-3-2 or 5-4-1), or use the 11-digit billing NDC. Leading zeros are preserved.';
  $('search-note').textContent=note;
  $('search-note').hidden=!note;
+ const lookup=ndc&&!count&&!reviewOnly&&!$('status-filter').value&&(openExact||state.dailyMedNdc===ndc);
+ state.dailyMedNdc=lookup?ndc:'';
+ $('dailymed-result').hidden=!lookup;
+ if(lookup)showDailymedResult(ndc);
  if(openExact&&packages?.length===1&&!document.querySelector('dialog[open]')){
   openDetail(packages[0].id);
  }
+}
+async function showDailymedResult(ndc){
+ const panel=$('dailymed-result');
+ $('empty').hidden=true;
+ panel.textContent='Checking DailyMed for this NDC…';
+ const found=await FormularyData.lookupDailymed(ndc);
+ if(state.dailyMedNdc!==ndc||exactNdcQuery()!==ndc)return;
+ if(found.status==='not_found'){
+  panel.hidden=true;
+  $('empty').hidden=false;
+  return;
+ }
+ if(found.status==='unavailable'){
+  panel.textContent='DailyMed lookup is temporarily unavailable. Press Enter to try again.';
+  return;
+ }
+ $('results-label').textContent='DailyMed package result';
+ $('page-label').textContent='1 DailyMed package';
+ const ingredient=(found.ingredients||[]).map(item=>[item.name,item.strength].filter(Boolean).join(' ')).join(' · ');
+ const routes=(found.routes||[]).join(', ');
+ const packaging=(found.packaging||[]).join(' · ');
+ const codes=(found.specificCodes||[]).map(([code,description])=>`<li><b>${esc(code)}</b> ${esc(description)}</li>`).join('');
+ panel.innerHTML=`<h3>${esc(found.name)}</h3>
+  <div class="detail-codebar"><span class="mono">${esc(found.packageNdc)}</span>
+  ${found.hcpcs?`<span class="hcpcs-pill">${esc(found.hcpcs)}</span><span>Assigned by DailyMed fallback rule</span>`:'<span>HCPCS needs review</span>'}</div>
+  <p>${[ingredient,routes,packaging].filter(Boolean).map(esc).join(' · ')}</p>
+  <p>${esc(found.reason||'Confirm payer coverage and billing units before using this assignment on a claim.')}</p>
+  ${codes?`<ul class="limits">${codes}</ul>`:''}
+  <a class="source-link" href="${esc(found.labelUrl)}" target="_blank" rel="noopener noreferrer">View DailyMed label ↗</a>`;
 }
 function resetPage(){state.page=0;render();}
 function submitSearch(openExact=true){

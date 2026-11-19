@@ -70,6 +70,22 @@ are retained, and the workbook flags any supplemental match for review without
 populating the CMS result column. Recheck the J1815 descriptor and OPPS indicator
 when updating the CMS snapshot.
 
+### DailyMed fallback assignments
+
+An exact NDC absent from the CMS and supplemental mappings can trigger a
+DailyMed package lookup. The service uses the FDA NDC Directory and NLM RxClass
+to check the prescription listing, form, route, and drug class. The lookup and
+audit label J8499 and J3490 assignments as DailyMed fallbacks. The workbook
+records them in a separate column and carries the source label on its review tab.
+Products with a possible specific code, special coding, or unconfirmed evidence
+go to review. Review the label and payer rules for coverage and billing units.
+
+The descriptor index uses the CMS quarterly HCPCS file and aliases from the
+packaged CMS crosswalk snapshot. After packaging a new quarter, run
+\`python scripts/build_hcpcs_descriptors.py <CMS ZIP path> <CMS ZIP URL>\` from
+this directory. The lookup only assigns fallback codes when the index matches
+the active quarter.
+
 ### HCPCS history by item
 
 The active drug details show the codes and billing-unit descriptions listed for

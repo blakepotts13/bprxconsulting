@@ -63,5 +63,21 @@
       throw error;
     }
   }
-  globalThis.FormularyData = { loadDatabase, openDatabase, FDA_DIRECTORY };
+  const dailyMedCache = new Map();
+  function lookupDailymed(ndc) {
+    if (!dailyMedCache.has(ndc)) {
+      const request = fetch("dailymed.json?ndc=" + encodeURIComponent(ndc), {
+        cache: "no-store", credentials: "same-origin",
+      }).then((response) => {
+        if (!response.ok) throw new Error("DailyMed lookup unavailable");
+        return response.json();
+      }).catch(() => {
+        dailyMedCache.delete(ndc);
+        return { status: "unavailable" };
+      });
+      dailyMedCache.set(ndc, request);
+    }
+    return dailyMedCache.get(ndc);
+  }
+  globalThis.FormularyData = { loadDatabase, openDatabase, FDA_DIRECTORY, lookupDailymed };
 })();

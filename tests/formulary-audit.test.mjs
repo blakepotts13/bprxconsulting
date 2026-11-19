@@ -52,6 +52,7 @@ test("workbook audit preserves submitted values and flags ambiguous rows without
       row(9, ["Missing", null, "J1938"]),
       row(10, ["Insulin with overlapping mappings", "00002-7510-01", "J1817"]),
       row(11, ["Supplemental insulin only", "12345-0001-01", "J1815"]),
+      row(12, ["Amoxicillin", "00093-2263-01", null]),
     ].join("");
     const other = `<worksheet xmlns="${ns}"><sheetData><row r="1"><c r="A1"><f>1+1</f><v>2</v></c></row></sheetData></worksheet>`;
     const parts = {
@@ -101,11 +102,26 @@ test("workbook audit preserves submitted values and flags ambiguous rows without
         { ...columns, header: 2 },
         index,
         { quarter: "2026 Q4" },
+        new Map([
+          [
+            "00093226301",
+            {
+              status: "assigned",
+              hcpcs: "J8499",
+              labelUrl:
+                "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=4c0f348a-a65d-409c-8668-207c82a5e3cb",
+            },
+          ],
+        ]),
       );
+    assert.deepEqual(
+      Array.from(audit.missingNdcs(sheet, { ...columns, header: 2 }, index)),
+      ["99999999999", "00093226301"],
+    );
     const output = run();
     assert.deepEqual(
       { ...output.counts },
-      { total: 9, matched: 1, different: 1, review: 7 },
+      { total: 10, matched: 1, different: 1, review: 8 },
     );
     assert.equal(output.reviewName, "HCPCS Review (2)");
     assert.equal(
@@ -124,7 +140,9 @@ test("workbook audit preserves submitted values and flags ambiguous rows without
       /<c r="(?:C3|D3)"[^>]*>[^]*J1030[^]*<c r="D3"[^>]*>[^]*J1010/,
     );
     assert.match(xml, /<c r="D5"[^>]*>[^]*J1756/);
-    assert.doesNotMatch(xml, /r="D(?:[6-9]|10|11)"/);
+    assert.doesNotMatch(xml, /r="D(?:[6-9]|10|11|12)"/);
+    assert.match(xml, /r="E2"[^>]*>[^]*Assigned HCPCS \(DailyMed fallback\)/);
+    assert.match(xml, /r="E12"[^>]*>[^]*J8499/);
     assert.equal(zip.strFromU8(result["xl/worksheets/sheet2.xml"]), other);
     const review = zip.strFromU8(result["xl/worksheets/bprx-audit.xml"]);
     assert.match(review, /Code differs/);
@@ -133,8 +151,15 @@ test("workbook audit preserves submitted values and flags ambiguous rows without
     assert.match(review, /No CMS crosswalk listing/);
     assert.match(review, /NDC missing/);
     assert.match(review, /Multiple CMS codes.*Q5105, Q5106/);
-    assert.match(review, /Verify insulin administration and HCPCS.*J1815 \(supplemental\), J1817 \(CMS\)/);
+    assert.match(
+      review,
+      /Verify insulin administration and HCPCS.*J1815 \(supplemental\), J1817 \(CMS\)/,
+    );
     assert.match(review, /12345-0001-01.*J1815 \(supplemental\)/);
+    assert.match(
+      review,
+      /DailyMed fallback assigned.*J8499.*dailymed.nlm.nih.gov/,
+    );
     assert.match(
       review,
       /t="inlineStr"><is><t xml:space="preserve">=Literal description/,

@@ -136,6 +136,8 @@
 }
 .package-row + .package-row { border-top: 1px solid var(--line); }
 #exact-ndc-results .package-open { padding-inline: clamp(14px, 2.5vw, 22px); }
+#dailymed-result { padding-inline: clamp(14px, 2.5vw, 22px); }
+#dailymed-result .detail-codebar { margin: 10px 0; }
 .package-open {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(135px, .62fr) minmax(110px, .66fr) auto;
