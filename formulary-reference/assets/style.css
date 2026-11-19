@@ -82,3 +82,83 @@
   }
   .top-actions .text-button { font-size: 11px; }
 }
+
+.results-section table { min-width: 570px; }
+.results-section th:first-child { width: 40%; }
+.group-button {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  font-size: 13px;
+}
+.group-button .hcpcs-pill { flex: 0 0 auto; }
+.group-dialog .dialog-top {
+  justify-content: flex-end;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin-bottom: 0;
+  pointer-events: none;
+}
+.group-dialog .icon-button { pointer-events: auto; }
+#group-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding-right: 34px;
+  margin-top: -25px;
+}
+.package-search {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #adbbaf;
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+.package-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+}
+.package-toolbar p { margin: 0; }
+.package-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  border-top: 1px solid var(--line);
+}
+.package-row + .package-row { border-top: 1px solid var(--line); }
+.package-open {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(135px, .62fr) minmax(110px, .66fr) auto;
+  align-items: center;
+  gap: 6px 14px;
+  width: 100%;
+  padding: 13px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.package-open:hover { background: #f2f8f5; }
+.package-name, .package-ndc { display: grid; gap: 3px; overflow-wrap: anywhere; }
+.package-name > span, .package-units { color: var(--muted); }
+.package-match { color: #2a674d; font-size: 11px; }
+.package-ndc .review-tag { justify-self: start; }
+.package-arrow { color: var(--green); font-size: 15px; }
+.group-policies { margin-top: 22px; scroll-margin-top: 40px; }
+.group-policies > summary { font-weight: 650; cursor: pointer; }
+@media (max-width: 540px) {
+  .package-open { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .package-name { grid-column: 1 / -1; }
+  .package-ndc, .package-units { align-self: start; }
+}

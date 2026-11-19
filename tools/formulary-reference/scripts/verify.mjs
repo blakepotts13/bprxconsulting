@@ -164,7 +164,8 @@ for (
   await new Promise((r) => setTimeout(r, 25));
 const $ = (id) => w.document.getElementById(id);
 const evalIn = (code) => vm.runInContext(code, dom.getInternalVMContext());
-const rows = () => evalIn("state.rows");
+const rows = () => evalIn("fetchMatchingPackages()");
+const groups = () => evalIn("state.rows");
 const setSearch = (q, mode = "all") => {
   evalIn("state.mode=" + JSON.stringify(mode));
   $("search").value = q;
@@ -188,7 +189,7 @@ assert.equal(
 );
 assert.equal($("review-filter").value, "units");
 assert.equal($("review-note").hidden, false);
-assert.ok(evalIn("fetchRows(false).every(unitReview)"));
+assert.ok(evalIn("fetchMatchingPackages().every(unitReview)"));
 let exportedBlob, downloadName;
 w.Blob = Blob;
 w.URL.createObjectURL = (blob) => {
@@ -222,6 +223,9 @@ $("reset").click();
 assert.equal(new URL(w.location.href).searchParams.has("review"), false);
 assert.equal(evalIn("state.total"), 7802);
 setSearch("J1756", "hcpcs");
+assert.equal(groups().length, 1);
+assert.equal(groups()[0].hcpcs, "J1756");
+assert.equal(groups()[0].description, "Iron sucrose injection");
 assert.ok(rows().length >= 4);
 assert.ok(
   rows().every(
@@ -275,9 +279,9 @@ assert.ok(
 );
 setSearch("25021-0142-20", "ndc");
 assert.match($("results-body").textContent, /Check unit conversion/);
-assert.ok(evalIn("unitReview(state.rows[0])"));
+assert.ok(evalIn("unitReview(fetchMatchingPackages()[0])"));
 // Native dialog behavior is the only browser feature stubbed by this DOM test.
-for (const id of ["detail-dialog", "source-dialog"]) {
+for (const id of ["group-dialog", "detail-dialog", "source-dialog"]) {
   $(id).showModal = function () {
     this.setAttribute("open", "");
   };
@@ -285,10 +289,14 @@ for (const id of ["detail-dialog", "source-dialog"]) {
     this.removeAttribute("open");
   };
 }
-$("results-body").querySelector("button").click();
+function openFirstPackage() {
+  $("results-body").querySelector(".group-button").click();
+  $("package-list").querySelector(".package-open").click();
+}
+openFirstPackage();
 assert.match($("detail-content").textContent, /Source conversion needs review/);
 setSearch("J1756", "hcpcs");
-$("results-body").querySelector("button").click();
+openFirstPackage();
 assert.equal(
   $("detail-content").querySelector(".allowable-amount").textContent,
   "$0.224",
@@ -323,7 +331,7 @@ assert.equal(
 );
 assert.match($("detail-content").textContent, /does not mean \$0/);
 setSearch("A9606", "hcpcs");
-$("results-body").querySelector("button").click();
+openFirstPackage();
 assert.match($("detail-content").textContent, /100% AWP/);
 assert.match(
   $("detail-content").querySelector(".allowable-unit-warning").textContent,
@@ -334,13 +342,13 @@ assert.equal(
   "No numeric amount published",
 );
 setSearch("J0897", "hcpcs");
-$("results-body").querySelector("button").click();
+openFirstPackage();
 assert.match($("detail-content").textContent, /Inflation-adjusted coinsurance/);
 assert.match($("detail-content").textContent, /ICD-10 group/);
 assert.match($("detail-content").textContent, /Group numbers are independent/);
 assert.ok($("detail-content").querySelector('a[href*="articleid=52399"]'));
 setSearch("888867413689", "ndc");
-$("results-body").querySelector("button").click();
+openFirstPackage();
 assert.match($("detail-content").textContent, /alternate identifier/);
 
 await evalIn("renderHcpcsHistory(state.selected, $('hcpcs-history'))");
@@ -355,7 +363,7 @@ for (const [ndc, active, old, otherOld, newUnit] of [
   ["00009-0003-02", "J2919", "J2930", "J2920", "5 MG"],
 ]) {
   setSearch(ndc, "ndc");
-  $("results-body").querySelector("button").click();
+  openFirstPackage();
   await evalIn("renderHcpcsHistory(state.selected, $('hcpcs-history'))");
   const panel = $("hcpcs-history");
   const timeline = panel.querySelector("tbody");
@@ -382,9 +390,38 @@ for (const [ndc, active, old, otherOld, newUnit] of [
   );
 }
 setSearch("00517-2340-10", "ndc");
-$("results-body").querySelector("button").click();
+openFirstPackage();
 await evalIn("renderHcpcsHistory(state.selected, $('hcpcs-history'))");
 assert.match($("hcpcs-history").textContent, /CMS listed J1756 for this NDC/);
+assert.equal($("results-body").querySelectorAll(".group-button").length, 1);
+assert.match($("results-body").textContent, /1 match current filters/);
+$("close-detail").click();
+assert.equal($("group-dialog").open, true);
+assert.equal($("package-list").children.length, 26);
+assert.match($("package-list").firstElementChild.textContent, /00517-2340-10/);
+function searchPackages(term) {
+  $("package-search").value = term;
+  $("package-search").dispatchEvent(new w.Event("input"));
+}
+searchPackages("0517-2340-10");
+assert.equal($("package-list").children.length, 1);
+assert.match($("package-list").textContent, /00517-2340-10/);
+$("package-list").querySelector("button").click();
+assert.equal(evalIn("state.selected.ndc"), "00517234010");
+$("close-detail").click();
+assert.equal($("package-search").value, "0517-2340-10");
+assert.equal($("package-list").children.length, 1);
+searchPackages("venofer");
+assert.ok($("package-list").children.length > 1);
+assert.doesNotMatch($("package-list").textContent, /Iron Sucrose Injection/);
+searchPackages("not present");
+assert.equal($("package-list").children.length, 0);
+assert.equal($("package-empty").hidden, false);
+$("clear-package-search").click();
+assert.equal($("package-list").children.length, 26);
+$("close-group").click();
+assert.equal($("group-dialog").open, false);
+
 assert.equal($("hcpcs-history").querySelector(".history-decision"), null);
 
 setSearch("J7207", "hcpcs");
@@ -418,21 +455,18 @@ assert.match(
 );
 assert.ok(rows().every((r) => r.policy_count > 0));
 w.HTMLElement.prototype.scrollIntoView = function () {};
-$("results-body").querySelector(".policy-button").click();
+$("results-body").querySelector("[data-policies]").click();
+assert.match($("group-content").textContent, /Other contractor—reference only/);
 assert.match(
-  $("detail-content").textContent,
-  /Other contractor—reference only/,
-);
-assert.match(
-  $("detail-content").textContent,
+  $("group-content").textContent,
   /does not establish Illinois coverage/,
 );
-assert.ok($("detail-content").querySelector(".contractor-list li"));
+assert.ok($("group-content").querySelector(".contractor-list li"));
 assert.ok(
-  $("detail-content").querySelector("details[open] .dx-list .dx-item"),
+  $("group-content").querySelector("details[open] .dx-list .dx-item"),
   "View ICD-10 codes expands a diagnosis group",
 );
-assert.ok(!$("detail-content").textContent.includes("NGS J6 · Illinois"));
+assert.ok(!$("group-content").textContent.includes("NGS J6 · Illinois"));
 $("export").click();
 const otherCsv = await exportedBlob.text();
 assert.match(otherCsv, /Selected policy scope/);
@@ -440,13 +474,13 @@ assert.match(otherCsv, /Other contractor—reference only/);
 assert.match(otherCsv, /A56065/);
 setSearch("D66", "icd");
 assert.ok(
-  evalIn('fetchRows(false).some(r=>r.hcpcs==="J7207")'),
+  evalIn('fetchMatchingPackages().some(r=>r.hcpcs==="J7207")'),
   "Other-contractor diagnosis search includes the newly indexed article",
 );
 $("scope-filter").value = "a";
 $("scope-filter").dispatchEvent(new w.Event("change"));
 assert.ok(
-  !evalIn('fetchRows(false).some(r=>r.hcpcs==="J7207")'),
+  !evalIn('fetchMatchingPackages().some(r=>r.hcpcs==="J7207")'),
   "New diagnosis relationships do not leak into Illinois results",
 );
 $("reset").click();
@@ -458,7 +492,7 @@ assert.match($("source-content").textContent, /No patient information/);
 assert.match($("source-content").textContent, /not included/);
 assert.equal(
   w.document.querySelectorAll(".results-section thead th").length,
-  7,
+  5,
 );
 const corrupt = {
   ...manifest,
@@ -475,7 +509,7 @@ await assert.rejects(
   /approved account/,
 );
 console.log(
-  "PASS: database integrity, manifest checksum, public-code scope, exact & normalized NDC lookup, HCPCS & description search, ICD-10 co-listings, parameter safety, SI filters, pagination, unit flags, alternate IDs, policy notes, contractor provenance, scope isolation, new diagnosis relationships, scoped exports, exact Medicare Allowable amounts and units, pricing notes, missing rates, exact-NDC HCPCS history, and source disclosures.",
+  "PASS: database integrity, manifest checksum, public-code scope, exact & normalized NDC lookup, HCPCS & description search, ICD-10 co-listings, HCPCS grouping and searchable package details, parameter safety, SI filters, pagination, unit flags, alternate IDs, policy notes, contractor provenance, scope isolation, new diagnosis relationships, scoped exports, exact Medicare Allowable amounts and units, pricing notes, missing rates, exact-NDC HCPCS history, and source disclosures.",
 );
 console.log("Dataset:", JSON.stringify(manifest.counts));
 dom.window.close();
