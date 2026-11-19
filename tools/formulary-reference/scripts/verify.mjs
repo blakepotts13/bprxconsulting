@@ -424,6 +424,23 @@ assert.equal($("group-dialog").open, false);
 
 assert.equal($("hcpcs-history").querySelector(".history-decision"), null);
 
+setSearch("J1938", "hcpcs");
+$("results-body").querySelector(".group-button").click();
+assert.equal($("package-list").children.length, 57);
+for (const [ndc, unitsPerItem] of [
+  ["00143-9155-25", 20],
+  ["00143-9156-10", 40],
+]) {
+  const row = [...$("package-list").children].find(
+    (item) => item.querySelector(".package-ndc .mono").textContent === ndc,
+  );
+  assert.equal(
+    row.querySelector(".package-units").textContent.trim(),
+    `${unitsPerItem} HCPCS units per item`,
+  );
+}
+$("close-group").click();
+
 setSearch("J7207", "hcpcs");
 assert.ok(rows().length > 0);
 assert.ok(

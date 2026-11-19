@@ -205,7 +205,7 @@ function packageListRow(p,showMatches){
     ${showMatches&&p.matches_search?'<span class="package-match">Matches current filters</span>':''}
     ${unitReview(p)?'<span class="review-tag">Check unit conversion</span>':''}
    </span>
-   <span class="package-units"><b>${esc(fmt(p.units_ndc))}</b> HCPCS units / pack</span>
+   <span class="package-units"><b>${esc(fmt(p.units_item))}</b> HCPCS units per item</span>
    <span aria-hidden="true" class="package-arrow">↗</span>
   </button></li>`;
 }
