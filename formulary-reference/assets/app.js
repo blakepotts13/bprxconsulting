@@ -1,13 +1,25 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const state = {db:null,manifest:null,mode:'all',page:0,total:0,totalGroups:0,perPage:25,rows:[],groups:new Map(),timer:null,selected:null};
+const state = {db:null,manifest:null,mode:'all',page:0,total:0,resultCount:0,perPage:25,rows:[],groups:new Map(),timer:null,selected:null};
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = n => n==null ? 'Not specified' : Number(n).toLocaleString('en-US',{maximumFractionDigits:8});
 const siNames={G:'Pass-through drug or biological (OPPS)',K:'Separately payable non-pass-through drug or biological (OPPS)',N:'Packaged into OPPS payment'};
 function unitReview(d){const q=Number(d.package_qty);return d.units_item!=null && d.units_ndc!=null && Number.isFinite(q) && Math.abs(d.units_item*q-d.units_ndc)>0.001;}
 function siBadge(si){return `<span class="si-badge si-${['G','K','N'].includes(si)?si:si?'other':'missing'}" title="${esc(siNames[si]|| (si?'Other published OPPS indicator':'No matching OPPS indicator in this snapshot'))}">${esc(si||'Not specified')}</span>`;}
 function query(sql,params=[]){const statement=state.db.prepare(sql);try{statement.bind(params);const rows=[];while(statement.step())rows.push(statement.getAsObject());return rows;}finally{statement.free();}}
-function ndcNormalize(text){const parts=text.trim().split('-');if(parts.length===3&&parts.every(p=>/^\d+$/.test(p))){const sizes=parts.map(p=>p.length).join('-');if(['4-4-2','5-3-2','5-4-1','5-4-2'].includes(sizes))return parts.map((p,i)=>p.padStart([5,4,2][i],'0')).join('');}return text.replace(/[-\s]/g,'');}
+function billingNdc(text){
+ const value=text.trim();
+ if(/^\d{11}$/.test(value))return value;
+ const parts=value.split('-');
+ if(!parts.every(part=>/^\d+$/.test(part)))return '';
+ const format=parts.map(part=>part.length).join('-');
+ if(!['4-4-2','5-3-2','5-4-1','5-4-2'].includes(format))return '';
+ return parts.map((part,index)=>part.padStart([5,4,2][index],'0')).join('');
+}
+function ndcNormalize(text){return billingNdc(text)||text.replace(/[-\s]/g,'');}
+function exactNdcQuery(){
+ return state.mode==='all'||state.mode==='ndc'?billingNdc($('search').value):'';
+}
 function like(s){return '%'+s.replace(/[\\%_]/g,'\\$&')+'%';}
 function policyScope(alias='p'){
  const scope=$('scope-filter').value;
@@ -25,7 +37,11 @@ const unitReviewSql = `(${missingSupplementalUnits}) OR (d.units_item IS NOT NUL
 function conditions(){const q=$('search').value.trim(),mode=state.mode,params=[],clauses=[];const filter=$('status-filter').value;
  if(['G','K','N'].includes(filter)){clauses.push('d.si=?');params.push(filter);}else if(filter==='other')clauses.push("d.si NOT IN ('G','K','N','')");else if(filter==='missing')clauses.push("d.si=''");
  if($('review-filter').value==='units')clauses.push('('+unitReviewSql+')');
- if(q){const tests=[],testParams=[];
+ const exactNdc=exactNdcQuery();
+ if(exactNdc){
+  clauses.push('d.ndc=?');
+  params.push(exactNdc);
+ }else if(q){const tests=[],testParams=[];
   if(mode==='all'||mode==='ndc'){tests.push("d.ndc LIKE ? ESCAPE '\\'");testParams.push(like(ndcNormalize(q)));}
   if(mode==='all'||mode==='hcpcs'){tests.push("d.hcpcs LIKE ? ESCAPE '\\'");testParams.push(like(q.toUpperCase()));}
   if(mode==='all'||mode==='description'){const tokens=q.toLowerCase().split(/\s+/).filter(Boolean);tests.push('('+tokens.map(()=>"(lower(d.drug_name)||' '||lower(d.description)) LIKE ? ESCAPE '\\'").join(' AND ')+')');testParams.push(...tokens.map(like));}
@@ -65,7 +81,7 @@ function fetchGroups(){
   Number(b.hcpcs===q.toUpperCase())-Number(a.hcpcs===q.toUpperCase()) ||
   a.description.localeCompare(b.description) || a.hcpcs.localeCompare(b.hcpcs));
  state.total=groups.reduce((total,group)=>total+group.matches,0);
- state.totalGroups=groups.length;
+ state.resultCount=groups.length;
  const visible=groups.slice(state.page*state.perPage,(state.page+1)*state.perPage);
  if(visible.length){
   const counts=new Map(query(`SELECT d.hcpcs, ${policyCountSql('d.hcpcs')} AS policy_count
@@ -89,11 +105,19 @@ function groupRow(group){
  <td><button class="policy-button" data-hcpcs="${code}" aria-label="View packages for ${code}">${count} ↗</button>${matches}</td>
  <td>${esc(group.dosage||'Not specified')}</td><td>${group.si===null?'Varies':siBadge(group.si)}</td><td>${policies}</td></tr>`;
 }
-function render(){
+function render(openExact=false){
  if(!state.db)return;
- state.rows=fetchGroups();
- const groupCount=state.totalGroups;
- $('results-label').textContent=`${fmt(groupCount)} HCPCS ${groupCount===1?'code':'codes'}`;
+ const packages=exactNdcQuery()?fetchMatchingPackages():null;
+ const pageStart=state.page*state.perPage;
+ if(packages){
+  state.total=state.resultCount=packages.length;
+  state.rows=packages.slice(pageStart,pageStart+state.perPage);
+ }else{
+  state.rows=fetchGroups();
+ }
+ const count=state.resultCount;
+ const resultName=packages?'package mapping':'HCPCS code';
+ $('results-label').textContent=`${fmt(count)} ${resultName}${count===1?'':'s'}`;
  const reviewOnly=$('review-filter').value==='units';
  $('review-note').hidden=!reviewOnly;
  const address=new URL(location.href);
@@ -103,20 +127,33 @@ function render(){
  $('scope-note').hidden=$('scope-filter').value!=='other';
  $('scope-note').textContent=`Other contractor—reference only: ${fmt(state.manifest.counts.other_policies)} additional articles are available. These articles do not establish coverage for Illinois. Policy counts and ICD-10 matches below use this selected scope.`;
  const q=$('search').value.trim();
- $('results-subtitle').textContent=`${fmt(state.total)} matching package mapping${state.total===1?'':'s'}${q?` for “${q}”`:''}. Open a code to see all of its packages.`;
- $('results-body').innerHTML=state.rows.map(groupRow).join('');
- $('empty').hidden=groupCount>0;
- $('page-label').textContent=groupCount?`${fmt(state.page*state.perPage+1)}–${fmt(Math.min((state.page+1)*state.perPage,groupCount))} of ${fmt(groupCount)} codes`:'0 results';
+ $('results-subtitle').textContent=packages
+  ?count>1?'Choose a HCPCS mapping to view details for this NDC.':count?'Open the package to view its billing details.':''
+  :`${fmt(state.total)} matching package mapping${state.total===1?'':'s'}${q?` for “${q}”`:''}. Open a code to see all of its packages.`;
+ $('group-results').hidden=!!packages;
+ $('results-body').innerHTML=packages?'':state.rows.map(groupRow).join('');
+ $('exact-ndc-results').hidden=!packages||!count;
+ $('exact-ndc-results').innerHTML=packages?state.rows.map(p=>packageListRow(p,false,true)).join(''):'';
+ $('empty').hidden=count>0;
+ $('page-label').textContent=count?`${fmt(pageStart+1)}–${fmt(Math.min(pageStart+state.perPage,count))} of ${fmt(count)} ${packages?'mappings':'codes'}`:'0 results';
  $('prev').disabled=state.page===0;
- $('next').disabled=(state.page+1)*state.perPage>=groupCount;
+ $('next').disabled=pageStart+state.perPage>=count;
  $('export').disabled=!state.total;
  let note='';
  if(q&&diagnosisTerm())note='ICD-10 search finds drugs whose HCPCS codes are co-listed in an article within the selected policy scope containing this diagnosis. A result is a policy reference, not confirmation that every listed drug is covered for the diagnosis. Review the separate code groups.';
  if((state.mode==='ndc'||state.mode==='all')&&/^\d{10}$/.test(q))note='This unhyphenated 10-digit NDC is ambiguous. Enter its original hyphens (4-4-2, 5-3-2 or 5-4-1), or use the 11-digit billing NDC. Leading zeros are preserved.';
  $('search-note').textContent=note;
  $('search-note').hidden=!note;
+ if(openExact&&packages?.length===1&&!document.querySelector('dialog[open]')){
+  openDetail(packages[0].id);
+ }
 }
 function resetPage(){state.page=0;render();}
+function submitSearch(openExact=true){
+ clearTimeout(state.timer);
+ state.page=0;
+ render(openExact);
+}
 function toast(text){$('toast').textContent=text;$('toast').hidden=false;setTimeout(()=>$('toast').hidden=true,2200);}
 function policyUrl(p){return `https://www.cms.gov/medicare-coverage-database/view/article.aspx?articleid=${encodeURIComponent(p.id)}&ver=${encodeURIComponent(p.version)}`;}
 function policyCards(d,expand=false){const policies=query(`SELECT DISTINCT p.* FROM policies p JOIN policy_hcpcs ph ON ph.policy_id=p.id WHERE ph.hcpcs=? AND ${policyScope()} ORDER BY p.title`,[d.hcpcs]);
@@ -199,10 +236,12 @@ function packageMatches(p,value){
  const ndc=ndcNormalize(value);
  return !!(ndc&&p.ndc.includes(ndc)) || tokens.every(token=>name.includes(token));
 }
-function packageListRow(p,showMatches){
+function packageListRow(p,showMatches,showCode=false){
+ const code=showCode?`<span><span class="hcpcs-pill">${esc(p.hcpcs)}</span> ${esc(p.description)}</span>`:'';
+ const source=showCode&&p.mapping_origin==='supplemental'?'<span class="package-match">Supplemental mapping</span>':'';
  return `<li class="package-row">
   <button class="package-open" data-package-id="${p.id}">
-   <span class="package-name"><b>${esc(p.drug_name)}</b><span>${esc(p.labeler)}</span></span>
+   <span class="package-name"><b>${esc(p.drug_name)}</b>${code}<span>${esc(p.labeler)}</span>${source}</span>
    <span class="package-ndc"><span class="mono">${esc(p.ndc_display)}</span>
     ${showMatches&&p.matches_search?'<span class="package-match">Matches current filters</span>':''}
     ${unitReview(p)?'<span class="review-tag">Check unit conversion</span>':''}
@@ -253,13 +292,14 @@ function openGroup(code,policies=false){
  }
  input.addEventListener('input',renderPackages);
  clear.addEventListener('click',()=>{input.value='';renderPackages();input.focus();});
- list.addEventListener('click',event=>{
-  const button=event.target.closest('[data-package-id]');
-  if(button)openDetail(Number(button.dataset.packageId));
- });
+ list.addEventListener('click',openPackageFromClick);
  renderPackages();
  $('group-dialog').showModal();
  if(policies)$('group-policy-title').focus();
+}
+function openPackageFromClick(event){
+ const button=event.target.closest('[data-package-id]');
+ if(button)openDetail(Number(button.dataset.packageId));
 }
 function supplementalNotice(d){
  if(d.mapping_origin!=='supplemental')return '';
@@ -268,11 +308,29 @@ function supplementalNotice(d){
  return `<aside class="unit-warning"><b>Supplemental J1815 match.</b>${other} Confirm how the insulin was administered before choosing a code.${d.units_item==null?' Verify the exact package label to calculate billing units.':''}</aside>`;
 }
 function openDetail(id,policies=false){const d=query('SELECT * FROM drugs WHERE id=?',[id])[0];if(!d)return;state.selected=d;
- $('detail-content').innerHTML=`<h2>${esc(d.drug_name)}</h2><div class="subline">${esc(d.description)} · ${esc(d.labeler)}</div><div class="detail-codebar"><span class="mono">${esc(d.ndc_display)}</span><button id="copy-ndc" class="secondary-button">Copy NDC</button><span class="hcpcs-pill">${esc(d.hcpcs)}</span>${siBadge(d.si)}</div>${supplementalNotice(d)}${unitReview(d)?'<aside class="unit-warning"><b>Source conversion needs review.</b> CMS billing units per item × package quantity do not equal the published units per NDC pack. Both source values are preserved. Confirm the package and billing conversion before use.</aside>':''}${/^\d{11}$/.test(d.ndc)?'':'<aside class="unit-warning">This source record uses an alternate identifier rather than an 11-digit NDC. Verify the package NDC before using it in a build.</aside>'}${allowableCard(d)}<div class="detail-grid"><div><small>HCPCS billing unit</small><b>${esc(d.dosage||'Not specified')}</b></div><div><small>Billing units per item</small><b>${fmt(d.units_item)}</b></div><div><small>Billing units per NDC pack</small><b>${fmt(d.units_ndc)}</b></div><div><small>${d.mapping_origin==='supplemental'?'Product volume per item':'CMS package size'}</small><b>${esc(d.package_size||'Not specified')}</b></div><div><small>Items per NDC pack</small><b>${esc(d.package_qty||'Not specified')}</b></div><div><small>Reference period</small><b>Oct–Dec 2026</b></div></div><p class="detail-hint">Billing units are HCPCS units, not NDC reporting units. ${d.mapping_origin==='supplemental'?'Where FDA package data are available, units are calculated from insulin concentration × volume ÷ 5.':'Package size is reproduced from CMS and its unit is not independently verified here.'} Confirm the exact product label and local charge conversion before building.</p><p class="detail-hint"><b>OPPS indicator ${esc(d.si||'not specified')}:</b> ${esc(siNames[d.si]||'Review the published CMS indicator definition.')} This indicator does not determine CAH payment or JW/JZ eligibility.</p><section class="hcpcs-history" id="hcpcs-history" aria-labelledby="hcpcs-history-title"><h3 class="section-title" id="hcpcs-history-title">HCPCS history</h3><p class="detail-hint" role="status">Loading CMS crosswalk history…</p></section><h3 class="section-title" id="detail-policies">ICD-10 policy references</h3><p class="detail-hint">Policy co-listings for ${esc(d.hcpcs)} in ${esc($('scope-filter').selectedOptions[0].text)}. These are not validated drug–diagnosis pairings. Review the indication and both code-group notes.</p>${policyCards(d,policies)}<h3 class="section-title">Mapping source</h3><p class="detail-hint">${JSON.parse(d.source).map(esc).join('<br>')}</p>${d.mapping_origin==='supplemental'?historySource(state.manifest.sources.opps.url,'CMS OPPS status indicator')+` <a class="source-link" href="${FormularyData.FDA_DIRECTORY}" target="_blank" rel="noopener noreferrer">FDA NDC Directory ↗</a>`:`<a class="source-link" href="${esc(state.manifest.sources.crosswalk.url)}" target="_blank" rel="noopener noreferrer">Download original CMS crosswalk ↗</a>`}`;
+ $('detail-content').innerHTML=`<h2 id="detail-title">${esc(d.drug_name)}</h2><div class="subline">${esc(d.description)} · ${esc(d.labeler)}</div><div class="detail-codebar"><span class="mono">${esc(d.ndc_display)}</span><button id="copy-ndc" class="secondary-button">Copy NDC</button><span class="hcpcs-pill">${esc(d.hcpcs)}</span>${siBadge(d.si)}</div>${supplementalNotice(d)}${unitReview(d)?'<aside class="unit-warning"><b>Source conversion needs review.</b> CMS billing units per item × package quantity do not equal the published units per NDC pack. Both source values are preserved. Confirm the package and billing conversion before use.</aside>':''}${/^\d{11}$/.test(d.ndc)?'':'<aside class="unit-warning">This source record uses an alternate identifier rather than an 11-digit NDC. Verify the package NDC before using it in a build.</aside>'}${allowableCard(d)}<div class="detail-grid"><div><small>HCPCS billing unit</small><b>${esc(d.dosage||'Not specified')}</b></div><div><small>Billing units per item</small><b>${fmt(d.units_item)}</b></div><div><small>Billing units per NDC pack</small><b>${fmt(d.units_ndc)}</b></div><div><small>${d.mapping_origin==='supplemental'?'Product volume per item':'CMS package size'}</small><b>${esc(d.package_size||'Not specified')}</b></div><div><small>Items per NDC pack</small><b>${esc(d.package_qty||'Not specified')}</b></div><div><small>Reference period</small><b>Oct–Dec 2026</b></div></div><p class="detail-hint">Billing units are HCPCS units, not NDC reporting units. ${d.mapping_origin==='supplemental'?'Where FDA package data are available, units are calculated from insulin concentration × volume ÷ 5.':'Package size is reproduced from CMS and its unit is not independently verified here.'} Confirm the exact product label and local charge conversion before building.</p><p class="detail-hint"><b>OPPS indicator ${esc(d.si||'not specified')}:</b> ${esc(siNames[d.si]||'Review the published CMS indicator definition.')} This indicator does not determine CAH payment or JW/JZ eligibility.</p><section class="hcpcs-history" id="hcpcs-history" aria-labelledby="hcpcs-history-title"><h3 class="section-title" id="hcpcs-history-title">HCPCS history</h3><p class="detail-hint" role="status">Loading CMS crosswalk history…</p></section><h3 class="section-title" id="detail-policies">ICD-10 policy references</h3><p class="detail-hint">Policy co-listings for ${esc(d.hcpcs)} in ${esc($('scope-filter').selectedOptions[0].text)}. These are not validated drug–diagnosis pairings. Review the indication and both code-group notes.</p>${policyCards(d,policies)}<h3 class="section-title">Mapping source</h3><p class="detail-hint">${JSON.parse(d.source).map(esc).join('<br>')}</p>${d.mapping_origin==='supplemental'?historySource(state.manifest.sources.opps.url,'CMS OPPS status indicator')+` <a class="source-link" href="${FormularyData.FDA_DIRECTORY}" target="_blank" rel="noopener noreferrer">FDA NDC Directory ↗</a>`:`<a class="source-link" href="${esc(state.manifest.sources.crosswalk.url)}" target="_blank" rel="noopener noreferrer">Download original CMS crosswalk ↗</a>`}`;
  $('copy-ndc').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(d.ndc);toast('Billing NDC copied');}catch{toast('Copy unavailable; select the displayed NDC.');}});
  $('detail-dialog').showModal();const historyReady=renderHcpcsHistory(d,$('hcpcs-history'));if(policies){const active=d.id;historyReady.then(()=>{if(state.selected?.id===active&&$('detail-dialog').open)$('detail-policies').scrollIntoView({block:'start'});});}
 }
 function sources(){const m=state.manifest;if(!m){toast('Reference data is still loading.');return;}$('source-content').innerHTML=`<h2>Know where the data comes from.</h2><p class="detail-hint">This reference uses official CMS downloads. It also includes supplemental J1815 mappings from a supplied reference, with billing units calculated from FDA package data where available. Searches run in your browser. No patient information is needed.</p><div class="source-entry"><h3>NDC–HCPCS & billing units</h3><p>October 2026 crosswalk · Effective Oct 1–Dec 31, 2026. ASP, OPPS and PrEP files; applicable Level II rows only.</p><a class="source-link" href="${esc(m.sources.crosswalk.url)}" target="_blank" rel="noopener noreferrer">Original crosswalk ZIP ↗</a></div><div class="source-entry"><h3>Medicare Allowable</h3><p>${esc(m.sources.allowables.quarter)} · ${esc(m.sources.allowables.effective)} through ${esc(m.sources.allowables.effective_end)}. Published CMS Part B amounts per HCPCS billing unit for ${fmt(m.counts.allowable_hcpcs)} mapped codes (${fmt(m.counts.allowable_packages)} package mappings). Applicable add-ons are already included; amounts are not raw ASP. CMS notes and manufacturer-specific NDRA restrictions are retained. Missing amounts are not zero and do not establish noncoverage.</p><a class="source-link" href="${esc(m.sources.allowables.url)}" target="_blank" rel="noopener noreferrer">CMS quarterly pricing ZIP ↗</a><p><a class="source-link" href="https://www.cms.gov/files/document/mln006400-information-critical-access-hospitals.pdf" target="_blank" rel="noopener noreferrer">CMS CAH payment guidance ↗</a></p></div><div class="source-entry"><h3>OPPS status indicators</h3><p>October 2026 Addendum B · Updated Oct 15, 2026. Other published status indicators are preserved rather than converted to “not specified.”</p><a class="source-link" href="https://www.cms.gov/medicare/payment/prospective-payment-systems/hospital-outpatient-pps/quarterly-addenda-updates/october-2026-addendum-b" target="_blank" rel="noopener noreferrer">CMS Addendum B source ↗</a></div><div class="source-entry"><h3>HCPCS history</h3><p>Archived CMS crosswalks show which code and billing unit were listed for the same 11-digit NDC. The quarter links in each item open the underlying CMS ZIPs.</p><a class="source-link" href="https://www.cms.gov/medicare/payment/part-b-drugs/asp-pricing-files" target="_blank" rel="noopener noreferrer">CMS crosswalk archive ↗</a></div><div class="source-entry"><h3>ICD-10 policy references</h3><p>Current article download · Data as of ${esc(m.policy_snapshot)} · Released ${esc(m.policy_release)}. ${fmt(m.counts.policies)} current Medicare contractor articles listing mapped HCPCS: ${fmt(m.counts.ngs_policies)} NGS J6 Illinois articles and ${fmt(m.counts.other_policies)} other-contractor articles. NGS Part A (06101) is the default; other-contractor articles are reference only.</p><a class="source-link" href="https://www.cms.gov/medicare-coverage-database/downloads/downloads.aspx" target="_blank" rel="noopener noreferrer">Medicare Coverage Database downloads ↗</a></div><h3 class="section-title">Coverage & limitations</h3><ul class="limits">${m.limitations.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><p class="detail-hint">This is a reference prototype for review, not an approved formulary build or claims adjudication tool. A policy code’s presence does not replace medical necessity and documentation requirements.</p><p class="detail-hint">Snapshot assembled ${esc(m.as_of)}. Updates are manual; no recurring refresh has been configured.</p><a href="manifest.json" download class="source-link">Download source manifest</a> <span class="muted">·</span> <button type="button" id="download-database" class="text-button source-link">Download SQLite database</button>`;$('download-database').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([state.db.export()],{type:'application/vnd.sqlite3'}));const link=document.createElement('a');link.href=url;link.download='formulary-reference-2026-Q4.sqlite';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});$('source-dialog').showModal();}
 function exportCsv(){const rows=fetchMatchingPackages();const prices=new Map(query('SELECT * FROM medicare_allowables').map(a=>[a.hcpcs,a]));const pricing=state.manifest.sources.allowables;const headers=['NDC','Drug name','Description','HCPCS','HCPCS dosage per billing unit','Billing units per item','Billing units per NDC pack','Package size per item','Package quantity','OPPS status indicator','Unit review required','Selected policy scope','Medicare article references (not validated diagnosis pairings)','Article contractors','Mapping source','Period','Medicare Allowable (USD per HCPCS billing unit; not a CAH reimbursement estimate)','Medicare Allowable billing unit','Medicare Allowable effective start','Medicare Allowable effective end','CMS pricing notes','CMS NDRA manufacturer restrictions','Medicare Allowable source','CMS billing-unit descriptions differ'];const csvField=v=>'"'+String(v??'').replace(/"/g,'""')+'"';const text=[headers,...rows.map(d=>[d.ndc_display,d.drug_name,d.description,d.hcpcs,d.dosage,d.units_item,d.units_ndc,d.package_size,d.package_qty,d.si||'Not specified',d.mapping_origin==='supplemental'&&d.units_item==null?'YES — verify exact package label':unitReview(d)?'YES — source arithmetic needs review':'No arithmetic discrepancy identified',policyScopeLabel(),query(`SELECT DISTINCT p.id FROM policies p JOIN policy_hcpcs ph ON ph.policy_id=p.id WHERE ph.hcpcs=? AND ${policyScope()}`,[d.hcpcs]).map(p=>'A'+p.id).join('; '),query(`SELECT DISTINCT p.id FROM policies p JOIN policy_hcpcs ph ON ph.policy_id=p.id WHERE ph.hcpcs=? AND ${policyScope()}`,[d.hcpcs]).map(p=>'A'+p.id+': '+contractorRows(p.id).map(c=>c.name+' / '+c.number+' / '+c.contract_type+' / '+c.states).join(' | ')).join('; '),JSON.parse(d.source).join('; '),'2026-10-01 through 2026-12-31',prices.get(d.hcpcs)?.amount_text??'Not published',prices.get(d.hcpcs)?.billing_unit||'Not specified',pricing.effective,pricing.effective_end,prices.get(d.hcpcs)?.notes||'',prices.get(d.hcpcs)?.ndra_manufacturers||'',pricing.url,allowableUnitDiff(d,prices.get(d.hcpcs))?'Yes — verify unit equivalence':'No'])].map(row=>row.map(csvField).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob(['\uFEFF'+text],{type:'text/csv;charset=utf-8;'}));const a=document.createElement('a');a.href=url;a.download=$('review-filter').value==='units'?'formulary-unit-review-2026-Q4.csv':'formulary-reference-2026-Q4.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast(`Exported ${fmt(rows.length)} mappings`);}
-async function init(){try{const [SQL,m]=await Promise.all([initSqlJs({locateFile:f=>'vendor/'+f}),fetch('manifest.json?v=private-1',{cache:'no-store',credentials:'same-origin'}).then(r=>{if(!r.ok)throw Error('Sign in with an approved account to load the reference.');return r.json();})]);state.db=await FormularyData.openDatabase(SQL,m);state.manifest=m;state.groups=loadGroupSummaries();['search','status-filter','scope-filter','review-filter'].forEach(id=>$(id).disabled=false);const reviewCount=query('SELECT COUNT(*) AS n FROM drugs d WHERE '+unitReviewSql)[0].n;$('review-filter').options[1].textContent=`Needs unit review (${fmt(reviewCount)})`;$('summary-strip').innerHTML=`<div><b>${fmt(query('SELECT COUNT(*) AS n FROM drugs')[0].n)}</b><span>package mappings</span></div><div><b>${fmt(state.groups.size)}</b><span>HCPCS codes</span></div><div><b>${fmt(m.counts.policies)}</b><span>Medicare articles · ${fmt(m.counts.ngs_policies)} NGS / ${fmt(m.counts.other_policies)} other</span></div><div><b>Source data</b><span>Source links with every record</span></div>`;const url=new URL(location.href);if(['a','b','both','other'].includes(url.searchParams.get('scope')))$('scope-filter').value=url.searchParams.get('scope');if(url.searchParams.get('review')==='units')$('review-filter').value='units';if(url.searchParams.has('q'))$('search').value=url.searchParams.get('q');render();}catch(e){$('results-label').textContent='Reference data could not load';$('load-error').hidden=false;$('load-error').textContent='Please reload the page. If the problem continues, the database or SQLite engine may be unavailable. '+e.message;$('results-body').innerHTML='';}}
-$('search').addEventListener('input',()=>{clearTimeout(state.timer);state.timer=setTimeout(resetPage,180);});document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{state.mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});resetPage();}));['status-filter','scope-filter','review-filter'].forEach(id=>$(id).addEventListener('change',resetPage));$('reset').addEventListener('click',()=>{$('search').value='';$('status-filter').value='';$('scope-filter').value='a';$('review-filter').value='';state.mode='all';document.querySelectorAll('[data-mode]').forEach(b=>{b.classList.toggle('active',b.dataset.mode==='all');b.setAttribute('aria-pressed',String(b.dataset.mode==='all'));});resetPage();});$('results-body').addEventListener('click',e=>{const b=e.target.closest('[data-hcpcs]');if(b)openGroup(b.dataset.hcpcs,b.dataset.policies==='true');});$('prev').addEventListener('click',()=>{state.page--;render();});$('next').addEventListener('click',()=>{state.page++;render();});$('export').addEventListener('click',exportCsv);['sources-button','footer-sources'].forEach(id=>$(id).addEventListener('click',sources));$('close-group').addEventListener('click',()=>$('group-dialog').close());$('close-detail').addEventListener('click',()=>$('detail-dialog').close());$('close-sources').addEventListener('click',()=>$('source-dialog').close());for(const id of ['group-dialog','detail-dialog','source-dialog'])$(id).addEventListener('click',e=>{if(e.target===$(id)){const r=$(id).getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$(id).close();}});document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!document.querySelector('dialog[open]')){e.preventDefault();$('search').focus();}});init();
+async function init(){try{const [SQL,m]=await Promise.all([initSqlJs({locateFile:f=>'vendor/'+f}),fetch('manifest.json?v=private-1',{cache:'no-store',credentials:'same-origin'}).then(r=>{if(!r.ok)throw Error('Sign in with an approved account to load the reference.');return r.json();})]);state.db=await FormularyData.openDatabase(SQL,m);state.manifest=m;state.groups=loadGroupSummaries();['search','status-filter','scope-filter','review-filter'].forEach(id=>$(id).disabled=false);const reviewCount=query('SELECT COUNT(*) AS n FROM drugs d WHERE '+unitReviewSql)[0].n;$('review-filter').options[1].textContent=`Needs unit review (${fmt(reviewCount)})`;$('summary-strip').innerHTML=`<div><b>${fmt(query('SELECT COUNT(*) AS n FROM drugs')[0].n)}</b><span>package mappings</span></div><div><b>${fmt(state.groups.size)}</b><span>HCPCS codes</span></div><div><b>${fmt(m.counts.policies)}</b><span>Medicare articles · ${fmt(m.counts.ngs_policies)} NGS / ${fmt(m.counts.other_policies)} other</span></div><div><b>Source data</b><span>Source links with every record</span></div>`;const url=new URL(location.href);if(['a','b','both','other'].includes(url.searchParams.get('scope')))$('scope-filter').value=url.searchParams.get('scope');if(url.searchParams.get('review')==='units')$('review-filter').value='units';if(url.searchParams.has('q'))$('search').value=url.searchParams.get('q');render(true);}catch(e){$('results-label').textContent='Reference data could not load';$('load-error').hidden=false;$('load-error').textContent='Please reload the page. If the problem continues, the database or SQLite engine may be unavailable. '+e.message;$('results-body').innerHTML='';}}
+$('search').addEventListener('input',event=>{
+ clearTimeout(state.timer);
+ const pasted=event.inputType==='insertFromPaste';
+ state.timer=setTimeout(()=>{
+  const value=$('search').value.trim();
+  // A one-digit package segment can also be the start of a two-digit segment.
+  const possibleLongerNdc=!pasted&&/^\d{5}-\d{4}-\d$/.test(value)&&state.db
+   &&query('SELECT 1 FROM drugs WHERE ndc GLOB ? LIMIT 1',[value.replaceAll('-','')+'[0-9]']).length;
+  submitSearch(!possibleLongerNdc);
+ },180);
+});
+$('search').addEventListener('keydown',event=>{
+ if(event.key!=='Enter'||event.isComposing)return;
+ event.preventDefault();
+ submitSearch();
+});
+$('exact-ndc-results').addEventListener('click',openPackageFromClick);
+document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{state.mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});submitSearch();}));
+['status-filter','scope-filter','review-filter'].forEach(id=>$(id).addEventListener('change',resetPage));$('reset').addEventListener('click',()=>{$('search').value='';$('status-filter').value='';$('scope-filter').value='a';$('review-filter').value='';state.mode='all';document.querySelectorAll('[data-mode]').forEach(b=>{b.classList.toggle('active',b.dataset.mode==='all');b.setAttribute('aria-pressed',String(b.dataset.mode==='all'));});resetPage();});$('results-body').addEventListener('click',e=>{const b=e.target.closest('[data-hcpcs]');if(b)openGroup(b.dataset.hcpcs,b.dataset.policies==='true');});$('prev').addEventListener('click',()=>{state.page--;render();});$('next').addEventListener('click',()=>{state.page++;render();});$('export').addEventListener('click',exportCsv);['sources-button','footer-sources'].forEach(id=>$(id).addEventListener('click',sources));$('close-group').addEventListener('click',()=>$('group-dialog').close());$('close-detail').addEventListener('click',()=>$('detail-dialog').close());$('close-sources').addEventListener('click',()=>$('source-dialog').close());for(const id of ['group-dialog','detail-dialog','source-dialog'])$(id).addEventListener('click',e=>{if(e.target===$(id)){const r=$(id).getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$(id).close();}});document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!document.querySelector('dialog[open]')){e.preventDefault();$('search').focus();}});init();
